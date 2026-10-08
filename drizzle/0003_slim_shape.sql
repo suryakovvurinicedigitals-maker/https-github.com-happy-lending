@@ -1,0 +1,1 @@
+ALTER TABLE `loans` ADD `repayment_type` text DEFAULT 'EMI' NOT NULL;

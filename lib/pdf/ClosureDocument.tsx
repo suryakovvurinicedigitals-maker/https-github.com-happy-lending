@@ -1,0 +1,162 @@
+import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
+import { formatPaiseForPdf } from "@/lib/currency";
+
+const styles = StyleSheet.create({
+  page: { padding: 40, fontSize: 11, fontFamily: "Helvetica" },
+  title: { fontSize: 18, marginBottom: 16, fontWeight: 700 },
+  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+  label: { color: "#555" },
+  section: { marginTop: 20, marginBottom: 8, fontSize: 13, fontWeight: 700 },
+  logRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 3 },
+  tc: { marginTop: 8, lineHeight: 1.5, color: "#333" },
+  signatureRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
+  signatureBox: { width: "45%" },
+  signatureImage: { height: 60, objectFit: "contain", marginBottom: 4 },
+  signatureLine: { borderTopWidth: 1, borderTopColor: "#999", paddingTop: 4 },
+  signatureCaption: { fontSize: 9, color: "#555" },
+});
+
+interface ClosureProps {
+  loan: {
+    id: number;
+    principalPaise: number;
+    annualRatePercent: number;
+    tenureMonths: number;
+    repaymentType: "EMI" | "INTEREST_ONLY";
+    emiPaise: number;
+    totalInterestPaise: number;
+    finalTotalPaise: number;
+    startDate: number;
+    closedAt: number | null;
+  };
+  contact: { name: string };
+  paymentLogs: {
+    status: string;
+    amountPaidPaise: number | null;
+    note: string | null;
+    loggedAt: number;
+  }[];
+  lenderSignatureDataUri: string | null;
+  borrowerSignatureDataUri: string | null;
+}
+
+function fmtDate(ms: number | null) {
+  if (!ms) return "-";
+  return new Date(ms).toLocaleDateString("en-IN");
+}
+
+export function ClosureDocument({
+  loan,
+  contact,
+  paymentLogs,
+  lenderSignatureDataUri,
+  borrowerSignatureDataUri,
+}: ClosureProps) {
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.title}>Happy Lending — Loan Closure Statement</Text>
+
+        <View style={styles.row}>
+          <Text style={styles.label}>Contact</Text>
+          <Text>{contact.name}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Principal</Text>
+          <Text>{formatPaiseForPdf(loan.principalPaise)}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Interest rate</Text>
+          <Text>{loan.annualRatePercent}% p.a.</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Total interest</Text>
+          <Text>{formatPaiseForPdf(loan.totalInterestPaise)}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Tenure</Text>
+          <Text>{loan.tenureMonths} months</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Repayment type</Text>
+          <Text>
+            {loan.repaymentType === "INTEREST_ONLY"
+              ? "Interest-only (principal at the end)"
+              : "EMI (equal monthly installments)"}
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>
+            {loan.repaymentType === "INTEREST_ONLY" ? "Monthly interest" : "EMI"}
+          </Text>
+          <Text>{formatPaiseForPdf(loan.emiPaise)} / month</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Final total</Text>
+          <Text>{formatPaiseForPdf(loan.finalTotalPaise)}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Start date</Text>
+          <Text>{fmtDate(loan.startDate)}</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Closed date</Text>
+          <Text>{fmtDate(loan.closedAt)}</Text>
+        </View>
+
+        <Text style={styles.section}>Payment history</Text>
+        {paymentLogs.length === 0 ? (
+          <Text>No payment log entries.</Text>
+        ) : (
+          paymentLogs.map((log, i) => (
+            <View key={i} style={styles.logRow}>
+              <Text>
+                {fmtDate(log.loggedAt)} — {log.status}
+                {log.amountPaidPaise ? ` — ${formatPaiseForPdf(log.amountPaidPaise)}` : ""}
+                {log.note ? ` — ${log.note}` : ""}
+              </Text>
+            </View>
+          ))
+        )}
+
+        <Text style={styles.section}>Terms &amp; Conditions</Text>
+        <Text style={styles.tc}>
+          This document certifies that the loan of {formatPaiseForPdf(loan.principalPaise)} given
+          to {contact.name} on {fmtDate(loan.startDate)} has been fully settled as of{" "}
+          {fmtDate(loan.closedAt)}. Total amount settled: {formatPaiseForPdf(loan.finalTotalPaise)}{" "}
+          (Principal {formatPaiseForPdf(loan.principalPaise)} + Interest{" "}
+          {formatPaiseForPdf(loan.totalInterestPaise)}).
+          {"\n\n"}
+          1. This document is a personal record generated by the Happy Lending app and does
+          not constitute a legally binding contract.{"\n"}
+          2. Both parties acknowledge the above loan has been repaid in full with no
+          outstanding dues.{"\n"}
+          3. Any future dispute relating to this transaction shall be resolved amicably
+          between the parties.{"\n"}
+          4. This closure statement is final for this specific loan and supersedes any
+          prior informal agreement regarding it.
+        </Text>
+
+        <Text style={styles.section}>Signatures</Text>
+        <View style={styles.signatureRow}>
+          <View style={styles.signatureBox}>
+            {lenderSignatureDataUri && (
+              <Image style={styles.signatureImage} src={lenderSignatureDataUri} />
+            )}
+            <View style={styles.signatureLine}>
+              <Text style={styles.signatureCaption}>Lender</Text>
+            </View>
+          </View>
+          <View style={styles.signatureBox}>
+            {borrowerSignatureDataUri && (
+              <Image style={styles.signatureImage} src={borrowerSignatureDataUri} />
+            )}
+            <View style={styles.signatureLine}>
+              <Text style={styles.signatureCaption}>Borrower ({contact.name})</Text>
+            </View>
+          </View>
+        </View>
+      </Page>
+    </Document>
+  );
+}

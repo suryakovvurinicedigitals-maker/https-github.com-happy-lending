@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1791439349409,
+      "tag": "0000_public_vermin",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791443559477,
+      "tag": "0001_common_nuke",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791454073911,
+      "tag": "0002_greedy_vengeance",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791455161995,
+      "tag": "0003_slim_shape",
+      "breakpoints": true
+    }
+  ]
+}
