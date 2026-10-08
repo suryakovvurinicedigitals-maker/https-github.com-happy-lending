@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { attachments } from "@/lib/db/schema";
 import { saveUpload } from "@/lib/uploads";
+import { compressImage } from "@/lib/image";
 
 export async function listAttachments(loanId: number) {
   return db
@@ -27,9 +28,12 @@ export async function uploadScreenshot(
     return { error: "Invalid loan." };
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const mimeType = file.type || "application/octet-stream";
-  const key = await saveUpload(loanId, file.name || "upload", buffer, mimeType);
+  const rawBuffer = Buffer.from(await file.arrayBuffer());
+  const rawMimeType = file.type || "application/octet-stream";
+  const { buffer, mimeType, extension } = await compressImage(rawBuffer, rawMimeType);
+  const baseName = (file.name || "upload").replace(/\.[^.]+$/, "");
+  const fileName = extension ? `${baseName}.${extension}` : file.name || "upload";
+  const key = await saveUpload(loanId, fileName, buffer, mimeType);
 
   await db.insert(attachments).values({
     loanId,
