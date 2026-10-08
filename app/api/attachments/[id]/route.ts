@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { readFile } from "fs/promises";
 import { db } from "@/lib/db";
 import { attachments } from "@/lib/db/schema";
-import { resolveUploadPath } from "@/lib/uploads";
+import { readUpload } from "@/lib/uploads";
 
 export async function GET(
   _request: NextRequest,
@@ -19,8 +18,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const filePath = resolveUploadPath(attachment.filePath);
-  const buffer = await readFile(filePath);
+  const buffer = await readUpload(attachment.filePath);
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {

@@ -28,13 +28,14 @@ export async function uploadScreenshot(
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const relativePath = await saveUpload(loanId, file.name || "upload", buffer);
+  const mimeType = file.type || "application/octet-stream";
+  const key = await saveUpload(loanId, file.name || "upload", buffer, mimeType);
 
   await db.insert(attachments).values({
     loanId,
     kind: "SCREENSHOT",
-    filePath: relativePath,
-    mimeType: file.type || "application/octet-stream",
+    filePath: key,
+    mimeType,
     originalFileName: file.name || null,
     createdAt: Date.now(),
   });
@@ -55,17 +56,18 @@ export async function saveSignature(
   const [, mimeType, base64] = match;
   const buffer = Buffer.from(base64, "base64");
 
-  const relativePath = await saveUpload(
+  const key = await saveUpload(
     loanId,
     `signature-${signerRole.toLowerCase()}.png`,
-    buffer
+    buffer,
+    mimeType
   );
 
   await db.insert(attachments).values({
     loanId,
     kind: "SIGNATURE",
     signerRole,
-    filePath: relativePath,
+    filePath: key,
     mimeType,
     originalFileName: `signature-${signerRole.toLowerCase()}.png`,
     createdAt: Date.now(),

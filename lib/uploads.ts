@@ -1,27 +1,43 @@
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
-const UPLOADS_ROOT = path.join(process.cwd(), "uploads");
+const bucket = process.env.R2_BUCKET_NAME ?? "";
+
+const s3 = new S3Client({
+  region: "auto",
+  endpoint: process.env.R2_ACCOUNT_ID
+    ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+    : undefined,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+  },
+});
 
 export async function saveUpload(
   loanId: number,
   fileName: string,
-  buffer: Buffer
+  buffer: Buffer,
+  mimeType: string
 ): Promise<string> {
-  const dir = path.join(UPLOADS_ROOT, "loans", String(loanId));
-  await mkdir(dir, { recursive: true });
-
   const safeName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-  const filePath = path.join(dir, safeName);
-  await writeFile(filePath, buffer);
+  const key = `loans/${loanId}/${safeName}`;
 
-  return path.relative(UPLOADS_ROOT, filePath);
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType,
+    })
+  );
+
+  return key;
 }
 
-export function resolveUploadPath(relativePath: string): string {
-  const resolved = path.resolve(UPLOADS_ROOT, relativePath);
-  if (!resolved.startsWith(UPLOADS_ROOT)) {
-    throw new Error("Invalid upload path");
-  }
-  return resolved;
+export async function readUpload(key: string): Promise<Buffer> {
+  const result = await s3.send(
+    new GetObjectCommand({ Bucket: bucket, Key: key })
+  );
+  const bytes = await result.Body!.transformToByteArray();
+  return Buffer.from(bytes);
 }

@@ -1,6 +1,5 @@
-import { readFile } from "fs/promises";
 import { listAttachments } from "@/actions/attachments";
-import { resolveUploadPath } from "@/lib/uploads";
+import { readUpload } from "@/lib/uploads";
 
 export async function loadSignatureDataUri(
   attachments: Awaited<ReturnType<typeof listAttachments>>,
@@ -11,6 +10,6 @@ export async function loadSignatureDataUri(
     .sort((a, b) => b.createdAt - a.createdAt)[0];
   if (!latest) return null;
 
-  const buffer = await readFile(resolveUploadPath(latest.filePath));
+  const buffer = await readUpload(latest.filePath);
   return `data:${latest.mimeType};base64,${buffer.toString("base64")}`;
 }
