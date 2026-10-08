@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { attachments } from "@/lib/db/schema";
 import { saveUpload } from "@/lib/uploads";
-import { compressImage } from "@/lib/image";
+import { compressImage, compressSignature } from "@/lib/image";
 
 export async function listAttachments(loanId: number) {
   return db
@@ -57,8 +57,10 @@ export async function saveSignature(
   if (!match) {
     throw new Error("Invalid signature image");
   }
-  const [, mimeType, base64] = match;
-  const buffer = Buffer.from(base64, "base64");
+  const [, , base64] = match;
+  const rawBuffer = Buffer.from(base64, "base64");
+  const buffer = await compressSignature(rawBuffer);
+  const mimeType = "image/png";
 
   const key = await saveUpload(
     loanId,
