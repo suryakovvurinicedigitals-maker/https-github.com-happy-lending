@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, MessageCircle, Smartphone } from "lucide-react";
-import { markInstallmentPaid, recordPartialPayment } from "@/actions/installments";
+import { CheckCircle2, MessageCircle, RotateCcw, Smartphone } from "lucide-react";
+import {
+  markInstallmentPaid,
+  recordPartialPayment,
+  revertInstallmentPayment,
+} from "@/actions/installments";
 import { buildWaLink } from "@/lib/whatsapp";
 import { buildSmsLink } from "@/lib/sms";
 import { buildInstallmentPaidMessage, buildPartialPaymentMessage } from "@/lib/messages";
@@ -34,6 +38,7 @@ export function RepaymentSchedule({
   const [partialOpenId, setPartialOpenId] = useState<number | null>(null);
   const [partialAmount, setPartialAmount] = useState("");
   const [partialError, setPartialError] = useState<string | null>(null);
+  const [revertConfirmId, setRevertConfirmId] = useState<number | null>(null);
 
   const owed = (i: Installment) =>
     i.status === "PAID" ? 0 : i.amountPaise - (i.amountPaidPaise ?? 0);
@@ -43,6 +48,13 @@ export function RepaymentSchedule({
   function handleMarkPaid(installment: Installment) {
     startTransition(() => {
       markInstallmentPaid(loanId, installment.id);
+    });
+  }
+
+  function handleRevert(installment: Installment) {
+    startTransition(async () => {
+      await revertInstallmentPayment(loanId, installment.id);
+      setRevertConfirmId(null);
     });
   }
 
@@ -153,13 +165,46 @@ export function RepaymentSchedule({
                     </p>
                   )}
                 </div>
-                {installment.status === "PAID" ? (
-                  <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-success">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Paid
-                  </span>
+                {revertConfirmId === installment.id ? (
+                  <div className="flex flex-wrap shrink-0 items-center gap-2">
+                    <span className="text-xs text-muted">Undo this payment?</span>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() => handleRevert(installment)}
+                    >
+                      {isPending ? "Reverting..." : "Yes, revert"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() => setRevertConfirmId(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : installment.status === "PAID" ? (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="flex items-center gap-1 text-xs font-medium text-success">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Paid
+                    </span>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => setRevertConfirmId(installment.id)}
+                      className="text-muted transition-colors hover:text-foreground"
+                      title="Revert this payment"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ) : (
-                  <div className="flex flex-wrap shrink-0 gap-2">
+                  <div className="flex flex-wrap shrink-0 items-center gap-2">
                     <a href={waHref} target="_blank" rel="noopener noreferrer">
                       <Button
                         type="button"
@@ -203,6 +248,17 @@ export function RepaymentSchedule({
                     >
                       Mark paid
                     </Button>
+                    {installment.status === "PARTIAL" && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => setRevertConfirmId(installment.id)}
+                        className="text-muted transition-colors hover:text-foreground"
+                        title="Revert this payment"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

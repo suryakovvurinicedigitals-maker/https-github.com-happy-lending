@@ -69,6 +69,10 @@ export const installments = sqliteTable("installments", {
   interestPaise: integer("interest_paise"),
   amountPaise: integer("amount_paise").notNull(),
   amountPaidPaise: integer("amount_paid_paise"),
+  // Snapshot of amountPaidPaise from just before the most recent payment
+  // action, so a revert can restore the exact prior PARTIAL/PENDING state
+  // instead of wiping the installment back to unpaid.
+  previousAmountPaidPaise: integer("previous_amount_paid_paise"),
   status: text("status", { enum: ["PENDING", "PARTIAL", "PAID"] })
     .notNull()
     .default("PENDING"),

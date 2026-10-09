@@ -1,0 +1,1 @@
+ALTER TABLE `installments` ADD `previous_amount_paid_paise` integer;

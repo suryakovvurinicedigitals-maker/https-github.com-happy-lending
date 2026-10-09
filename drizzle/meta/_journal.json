@@ -50,6 +50,13 @@
       "when": 1791538605593,
       "tag": "0006_add_installment_partial_payment",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791541465630,
+      "tag": "0007_flawless_menace",
+      "breakpoints": true
     }
   ]
 }

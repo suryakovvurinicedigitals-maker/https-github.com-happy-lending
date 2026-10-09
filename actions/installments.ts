@@ -19,7 +19,12 @@ export async function markInstallmentPaid(loanId: number, installmentId: number)
 
   await db
     .update(installments)
-    .set({ status: "PAID", paidAt: now, amountPaidPaise: installment.amountPaise })
+    .set({
+      status: "PAID",
+      paidAt: now,
+      amountPaidPaise: installment.amountPaise,
+      previousAmountPaidPaise: installment.amountPaidPaise,
+    })
     .where(eq(installments.id, installmentId));
 
   await db.insert(paymentLogs).values({
@@ -79,6 +84,7 @@ export async function recordPartialPayment(
       status: isFullySettled ? "PAID" : "PARTIAL",
       amountPaidPaise: newPaidPaise,
       paidAt: isFullySettled ? now : null,
+      previousAmountPaidPaise: installment.amountPaidPaise,
     })
     .where(eq(installments.id, installmentId));
 
@@ -117,4 +123,55 @@ export async function recordPartialPayment(
     remainingPaise,
     loanClosed: remaining.length === 0,
   };
+}
+
+// Undoes the most recent markInstallmentPaid/recordPartialPayment call on
+// this installment, restoring whatever PARTIAL/PENDING state it had just
+// before that action (not necessarily all the way back to unpaid).
+export async function revertInstallmentPayment(loanId: number, installmentId: number) {
+  const now = Date.now();
+
+  const [installment] = await db
+    .select()
+    .from(installments)
+    .where(eq(installments.id, installmentId));
+  if (!installment) return { error: "Installment not found." };
+  if (installment.status === "PENDING") {
+    return { error: "This installment hasn't been paid yet." };
+  }
+
+  const previousPaise = installment.previousAmountPaidPaise ?? 0;
+  const reversedPaise = (installment.amountPaidPaise ?? 0) - previousPaise;
+  const newStatus = previousPaise > 0 ? "PARTIAL" : "PENDING";
+
+  await db
+    .update(installments)
+    .set({
+      status: newStatus,
+      amountPaidPaise: previousPaise > 0 ? previousPaise : null,
+      paidAt: null,
+      previousAmountPaidPaise: null,
+    })
+    .where(eq(installments.id, installmentId));
+
+  await db.insert(paymentLogs).values({
+    loanId,
+    status: "PENDING",
+    amountPaidPaise: -reversedPaise,
+    note: `Month ${installment.monthNumber} payment reverted`,
+    loggedAt: now,
+  });
+
+  const [loan] = await db.select().from(loans).where(eq(loans.id, loanId));
+  if (loan && loan.status === "RECEIVED") {
+    await db
+      .update(loans)
+      .set({ status: "PENDING", closedAt: null, updatedAt: now })
+      .where(eq(loans.id, loanId));
+  }
+
+  revalidatePath(`/loans/${loanId}`);
+  revalidatePath("/");
+
+  return {};
 }
