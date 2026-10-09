@@ -151,21 +151,25 @@ const tenureSchema = z.object({
   tenureMonths: z.coerce.number().int().positive(),
 });
 
-export async function updateTenure(
-  loanId: number,
-  newTenureMonthsInput: number
-): Promise<{ error?: string }> {
-  const parsed = tenureSchema.safeParse({ tenureMonths: newTenureMonthsInput });
-  if (!parsed.success) {
-    return { error: "Enter a valid tenure in months" };
-  }
-  const { tenureMonths: newTenureMonths } = parsed.data;
+const rateSchema = z.object({
+  annualRatePercent: z.coerce.number().min(0),
+});
 
+// Shared by updateTenure and updateRate: recalculates EMI/interest/totals for
+// the new terms and rebuilds only the not-yet-paid tail of the schedule.
+// Already-PAID installments are never touched.
+async function applyLoanTermsChange(
+  loanId: number,
+  changes: { tenureMonths?: number; annualRatePercent?: number }
+): Promise<{ error?: string }> {
   const [loan] = await db.select().from(loans).where(eq(loans.id, loanId));
   if (!loan) return { error: "Loan not found" };
   if (loan.status !== "PENDING") {
-    return { error: "Only pending loans can have their tenure edited" };
+    return { error: "Only pending loans can have their terms edited" };
   }
+
+  const newTenureMonths = changes.tenureMonths ?? loan.tenureMonths;
+  const newAnnualRatePercent = changes.annualRatePercent ?? loan.annualRatePercent;
 
   const existingInstallments = await db
     .select()
@@ -176,7 +180,7 @@ export async function updateTenure(
   if (existingInstallments.some((i) => i.status === "PARTIAL")) {
     return {
       error:
-        "This loan has a partially paid installment. Fully settle or wait until it's complete before editing the tenure.",
+        "This loan has a partially paid installment. Fully settle or wait until it's complete before editing the loan terms.",
     };
   }
 
@@ -191,7 +195,7 @@ export async function updateTenure(
     };
   }
 
-  if (newTenureMonths === loan.tenureMonths) {
+  if (newTenureMonths === loan.tenureMonths && newAnnualRatePercent === loan.annualRatePercent) {
     return {};
   }
 
@@ -201,8 +205,8 @@ export async function updateTenure(
           emiPaise: r.monthlyInterestPaise,
           totalInterestPaise: r.totalInterestPaise,
           finalTotalPaise: r.finalTotalPaise,
-        }))(calculateInterestOnly(loan.principalPaise, loan.annualRatePercent, newTenureMonths))
-      : calculateEmi(loan.principalPaise, loan.annualRatePercent, newTenureMonths);
+        }))(calculateInterestOnly(loan.principalPaise, newAnnualRatePercent, newTenureMonths))
+      : calculateEmi(loan.principalPaise, newAnnualRatePercent, newTenureMonths);
 
   const remainingSchedule = rebuildRemainingSchedule({
     startDate: loan.startDate,
@@ -217,8 +221,6 @@ export async function updateTenure(
 
   const now = Date.now();
 
-  // Already-PAID installments are never touched — only PENDING rows (the
-  // not-yet-paid tail) are replaced with the recalculated remaining schedule.
   await db
     .delete(installments)
     .where(and(eq(installments.loanId, loanId), eq(installments.status, "PENDING")));
@@ -240,6 +242,7 @@ export async function updateTenure(
     .update(loans)
     .set({
       tenureMonths: newTenureMonths,
+      annualRatePercent: newAnnualRatePercent,
       emiPaise,
       totalInterestPaise,
       finalTotalPaise,
@@ -252,6 +255,30 @@ export async function updateTenure(
   revalidatePath(`/contacts/${loan.contactId}`);
 
   return {};
+}
+
+export async function updateTenure(
+  loanId: number,
+  newTenureMonthsInput: number
+): Promise<{ error?: string }> {
+  const parsed = tenureSchema.safeParse({ tenureMonths: newTenureMonthsInput });
+  if (!parsed.success) {
+    return { error: "Enter a valid tenure in months" };
+  }
+  return applyLoanTermsChange(loanId, { tenureMonths: parsed.data.tenureMonths });
+}
+
+export async function updateRate(
+  loanId: number,
+  newAnnualRatePercentInput: number
+): Promise<{ error?: string }> {
+  const parsed = rateSchema.safeParse({ annualRatePercent: newAnnualRatePercentInput });
+  if (!parsed.success) {
+    return { error: "Enter a valid interest rate" };
+  }
+  return applyLoanTermsChange(loanId, {
+    annualRatePercent: parsed.data.annualRatePercent,
+  });
 }
 
 export async function deleteLoan(loanId: number) {

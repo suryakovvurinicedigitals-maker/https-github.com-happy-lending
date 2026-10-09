@@ -1,16 +1,24 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { ReactNode } from "react";
-import { Wallet, TrendingUp, Clock, Inbox, ChevronRight, BellRing, FileDown } from "lucide-react";
+import {
+  Wallet,
+  TrendingUp,
+  Clock,
+  Inbox,
+  BellRing,
+  FileDown,
+  AlertTriangle,
+} from "lucide-react";
 import { db } from "@/lib/db";
-import { loans, contacts } from "@/lib/db/schema";
+import { loans, contacts, installments } from "@/lib/db/schema";
 import { listDueReminders } from "@/actions/reminders";
 import { formatPaise } from "@/lib/currency";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { StatusBadge } from "@/components/StatusBadge";
 import { ReminderQueueItem } from "@/components/ReminderQueueItem";
+import { LoanListFilter } from "@/components/LoanListFilter";
 
 export default async function DashboardPage() {
   const rows = await db
@@ -32,6 +40,29 @@ export default async function DashboardPage() {
   );
   const totalLentPaise = rows.reduce((sum, r) => sum + r.principalPaise, 0);
   const dueReminders = await listDueReminders();
+
+  const allInstallments = await db
+    .select({
+      loanId: installments.loanId,
+      amountPaise: installments.amountPaise,
+      amountPaidPaise: installments.amountPaidPaise,
+      status: installments.status,
+      dueDate: installments.dueDate,
+    })
+    .from(installments);
+
+  // eslint-disable-next-line react-hooks/purity -- overdue status must reflect the current wall-clock time, not a memoized render
+  const now = Date.now();
+  const overdueLoanIds = new Set<number>();
+  let overdueAmountPaise = 0;
+  for (const i of allInstallments) {
+    if (i.status !== "PAID" && i.dueDate < now) {
+      overdueLoanIds.add(i.loanId);
+      overdueAmountPaise += i.amountPaise - (i.amountPaidPaise ?? 0);
+    }
+  }
+
+  const loanRows = rows.map((r) => ({ ...r, overdue: overdueLoanIds.has(r.id) }));
 
   return (
     <div>
@@ -69,7 +100,7 @@ export default async function DashboardPage() {
         </Card>
       )}
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={<Wallet className="h-5 w-5" />}
           label="Total loans"
@@ -84,6 +115,12 @@ export default async function DashboardPage() {
           icon={<Clock className="h-5 w-5" />}
           label="Outstanding (pending)"
           value={formatPaise(totalOutstandingPaise)}
+        />
+        <StatCard
+          icon={<AlertTriangle className="h-5 w-5" />}
+          label={`Overdue (${overdueLoanIds.size})`}
+          value={formatPaise(overdueAmountPaise)}
+          tone={overdueLoanIds.size > 0 ? "danger" : undefined}
         />
       </div>
 
@@ -105,28 +142,7 @@ export default async function DashboardPage() {
           }
         />
       ) : (
-        <div className="space-y-2.5">
-          {rows.map((r) => (
-            <Link key={r.id} href={`/loans/${r.id}`}>
-              <Card
-                hover
-                className="flex items-center justify-between py-4"
-              >
-                <div>
-                  <p className="font-medium text-foreground">{r.contactName}</p>
-                  <p className="text-sm text-muted">
-                    {formatPaise(r.principalPaise)} principal &middot; Total{" "}
-                    {formatPaise(r.finalTotalPaise)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={r.status} />
-                  <ChevronRight className="h-4 w-4 text-muted" />
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        <LoanListFilter loans={loanRows} />
       )}
     </div>
   );
@@ -136,20 +152,26 @@ function StatCard({
   icon,
   label,
   value,
+  tone,
 }: {
   icon: ReactNode;
   label: string;
   value: string;
+  tone?: "danger";
 }) {
   return (
     <Card className="flex items-start justify-between">
       <div>
         <p className="text-sm text-muted">{label}</p>
-        <p className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground">
+        <p
+          className={`mt-1.5 text-2xl font-semibold tracking-tight ${
+            tone === "danger" ? "text-danger" : "text-foreground"
+          }`}
+        >
           {value}
         </p>
       </div>
-      <div className="text-muted">{icon}</div>
+      <div className={tone === "danger" ? "text-danger" : "text-muted"}>{icon}</div>
     </Card>
   );
 }

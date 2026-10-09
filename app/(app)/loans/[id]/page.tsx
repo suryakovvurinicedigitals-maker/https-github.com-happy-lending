@@ -18,6 +18,7 @@ import { PaymentPanel } from "@/components/PaymentPanel";
 import { RepaymentSchedule } from "@/components/RepaymentSchedule";
 import { DeleteLoanButton } from "@/components/DeleteLoanButton";
 import { EditTenureControl } from "@/components/EditTenureControl";
+import { EditRateControl } from "@/components/EditRateControl";
 
 export default async function LoanDetailPage({
   params,
@@ -62,10 +63,21 @@ export default async function LoanDetailPage({
         <SectionTitle icon={<ReceiptText className="h-4 w-4" />}>Summary</SectionTitle>
         <div className="divide-y divide-border text-sm">
           <Row label="Principal" value={formatPaise(loan.principalPaise)} />
-          <Row
-            label="Interest"
-            value={`${loan.annualRatePercent}% · ${formatPaise(loan.totalInterestPaise)}`}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-y-1 py-2 text-sm">
+            <span className="text-muted">Interest</span>
+            {loan.status === "PENDING" ? (
+              <span className="flex items-center gap-2">
+                <EditRateControl loanId={loan.id} annualRatePercent={loan.annualRatePercent} />
+                <span className="font-medium text-foreground">
+                  · {formatPaise(loan.totalInterestPaise)}
+                </span>
+              </span>
+            ) : (
+              <span className="font-medium text-foreground">
+                {loan.annualRatePercent}% · {formatPaise(loan.totalInterestPaise)}
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-y-1 py-2 text-sm">
             <span className="text-muted">Tenure</span>
             {loan.status === "PENDING" ? (

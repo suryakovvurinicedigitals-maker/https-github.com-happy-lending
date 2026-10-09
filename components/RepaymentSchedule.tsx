@@ -86,6 +86,10 @@ export function RepaymentSchedule({
       <div className="divide-y divide-border">
         {installments.map((installment) => {
           const owedPaise = owed(installment);
+          // eslint-disable-next-line react-hooks/purity -- overdue status must reflect the current wall-clock time, not a memoized render
+          const now = Date.now();
+          const isOverdue = installment.status !== "PAID" && installment.dueDate < now;
+          const daysOverdue = isOverdue ? Math.floor((now - installment.dueDate) / 86400000) : 0;
           const remainingAfterFull = remainingPaise - owedPaise;
           const fullPaidMessage = buildInstallmentPaidMessage(
             contact,
@@ -114,17 +118,24 @@ export function RepaymentSchedule({
           return (
             <div
               key={installment.id}
-              className="flex flex-col gap-2 py-2.5 text-sm"
+              className={`flex flex-col gap-2 py-2.5 text-sm ${
+                isOverdue ? "border-l-2 border-danger pl-2.5 -ml-2.5" : ""
+              }`}
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                 <div className="min-w-0">
-                  <p className="font-medium text-foreground">
+                  <p className="flex flex-wrap items-center gap-1.5 font-medium text-foreground">
                     Month {installment.monthNumber} ·{" "}
                     {new Date(installment.dueDate).toLocaleDateString("en-IN", {
                       day: "2-digit",
                       month: "short",
                       year: "numeric",
                     })}
+                    {isOverdue && (
+                      <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger">
+                        Overdue {daysOverdue > 0 ? `· ${daysOverdue}d` : ""}
+                      </span>
+                    )}
                   </p>
                   {installment.principalPaise != null && installment.interestPaise != null && (
                     <p className="text-xs text-muted">
