@@ -65,52 +65,55 @@ export interface ScheduleEntry {
 }
 
 /**
- * Builds the month-by-month repayment schedule, split into principal and
- * interest components. Both components are divided evenly across the
- * tenure (interest is already flat/simple, not reducing-balance), with any
- * leftover paise from rounding absorbed into the final month so the
- * schedule sums exactly to principal + totalInterestPaise.
+ * Splits principalPaise/interestPaise evenly across monthCount months
+ * (numbered startMonth+1 .. startMonth+monthCount), with any leftover
+ * paise from rounding absorbed into the final month so the schedule sums
+ * exactly to principalPaise + interestPaise. Shared by buildRepaymentSchedule
+ * (startMonth 0, full loan totals) and rebuildRemainingSchedule (startMonth
+ * = months already paid, remaining totals only).
  *
  * For INTEREST_ONLY loans, only the final month carries a principal
  * component — every other month is interest-only, matching
  * calculateInterestOnly's "bullet" repayment shape.
  */
-export function buildRepaymentSchedule(params: {
+function distributeSchedule(params: {
   startDate: number;
-  tenureMonths: number;
+  startMonth: number;
+  monthCount: number;
   repaymentType: "EMI" | "INTEREST_ONLY";
   principalPaise: number;
-  totalInterestPaise: number;
+  interestPaise: number;
 }): ScheduleEntry[] {
-  const { startDate, tenureMonths, repaymentType, principalPaise, totalInterestPaise } =
+  const { startDate, startMonth, monthCount, repaymentType, principalPaise, interestPaise } =
     params;
 
   const schedule: ScheduleEntry[] = [];
   let principalRunning = 0;
   let interestRunning = 0;
 
-  for (let month = 1; month <= tenureMonths; month++) {
+  for (let i = 1; i <= monthCount; i++) {
+    const monthNumber = startMonth + i;
     const dueDate = new Date(startDate);
-    dueDate.setMonth(dueDate.getMonth() + month);
+    dueDate.setMonth(dueDate.getMonth() + monthNumber);
 
-    const isLastMonth = month === tenureMonths;
+    const isLastMonth = i === monthCount;
     let monthPrincipalPaise: number;
     let monthInterestPaise: number;
 
     if (repaymentType === "INTEREST_ONLY") {
-      monthInterestPaise = Math.round(totalInterestPaise / tenureMonths);
-      monthPrincipalPaise = isLastMonth ? principalPaise : 0;
+      monthInterestPaise = isLastMonth
+        ? interestPaise - interestRunning
+        : Math.round(interestPaise / monthCount);
+      monthPrincipalPaise = isLastMonth ? principalPaise - principalRunning : 0;
     } else if (isLastMonth) {
       monthPrincipalPaise = principalPaise - principalRunning;
-      monthInterestPaise = totalInterestPaise - interestRunning;
+      monthInterestPaise = interestPaise - interestRunning;
     } else {
       // Matches calculateEmi's rounding: round the combined payment once,
       // not the principal/interest components separately, so this figure
       // always agrees with the EMI shown on the loan summary.
-      const emiPaise = Math.round(
-        (principalPaise + totalInterestPaise) / tenureMonths
-      );
-      monthPrincipalPaise = Math.round(principalPaise / tenureMonths);
+      const emiPaise = Math.round((principalPaise + interestPaise) / monthCount);
+      monthPrincipalPaise = Math.round(principalPaise / monthCount);
       monthInterestPaise = emiPaise - monthPrincipalPaise;
     }
 
@@ -118,7 +121,7 @@ export function buildRepaymentSchedule(params: {
     interestRunning += monthInterestPaise;
 
     schedule.push({
-      monthNumber: month,
+      monthNumber,
       dueDate: dueDate.getTime(),
       principalPaise: monthPrincipalPaise,
       interestPaise: monthInterestPaise,
@@ -127,6 +130,52 @@ export function buildRepaymentSchedule(params: {
   }
 
   return schedule;
+}
+
+export function buildRepaymentSchedule(params: {
+  startDate: number;
+  tenureMonths: number;
+  repaymentType: "EMI" | "INTEREST_ONLY";
+  principalPaise: number;
+  totalInterestPaise: number;
+}): ScheduleEntry[] {
+  return distributeSchedule({
+    startDate: params.startDate,
+    startMonth: 0,
+    monthCount: params.tenureMonths,
+    repaymentType: params.repaymentType,
+    principalPaise: params.principalPaise,
+    interestPaise: params.totalInterestPaise,
+  });
+}
+
+/**
+ * Rebuilds only the not-yet-paid tail of a schedule after a loan's tenure
+ * is edited (e.g. the borrower's due date was extended). Already-PAID
+ * installments are left completely alone by the caller — this only
+ * produces replacement rows for the remaining months, spreading the
+ * remaining principal and remaining interest (computed at the new tenure)
+ * evenly across the remaining months.
+ */
+export function rebuildRemainingSchedule(params: {
+  startDate: number;
+  newTenureMonths: number;
+  repaymentType: "EMI" | "INTEREST_ONLY";
+  principalPaise: number;
+  newTotalInterestPaise: number;
+  paidMonths: number;
+  paidPrincipalPaise: number;
+  paidInterestPaise: number;
+}): ScheduleEntry[] {
+  const remainingMonths = params.newTenureMonths - params.paidMonths;
+  return distributeSchedule({
+    startDate: params.startDate,
+    startMonth: params.paidMonths,
+    monthCount: remainingMonths,
+    repaymentType: params.repaymentType,
+    principalPaise: params.principalPaise - params.paidPrincipalPaise,
+    interestPaise: params.newTotalInterestPaise - params.paidInterestPaise,
+  });
 }
 
 /**

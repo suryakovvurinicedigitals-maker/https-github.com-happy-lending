@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -13,7 +13,12 @@ import {
   attachments,
   reminders,
 } from "@/lib/db/schema";
-import { calculateEmi, calculateInterestOnly, buildRepaymentSchedule } from "@/lib/emi";
+import {
+  calculateEmi,
+  calculateInterestOnly,
+  buildRepaymentSchedule,
+  rebuildRemainingSchedule,
+} from "@/lib/emi";
 import { rupeesToPaise } from "@/lib/currency";
 import { deleteUploadsForLoan } from "@/lib/uploads";
 
@@ -140,6 +145,106 @@ export async function listLoansByContact(contactId: number) {
     .from(loans)
     .where(eq(loans.contactId, contactId))
     .orderBy(desc(loans.createdAt));
+}
+
+const tenureSchema = z.object({
+  tenureMonths: z.coerce.number().int().positive(),
+});
+
+export async function updateTenure(
+  loanId: number,
+  newTenureMonthsInput: number
+): Promise<{ error?: string }> {
+  const parsed = tenureSchema.safeParse({ tenureMonths: newTenureMonthsInput });
+  if (!parsed.success) {
+    return { error: "Enter a valid tenure in months" };
+  }
+  const { tenureMonths: newTenureMonths } = parsed.data;
+
+  const [loan] = await db.select().from(loans).where(eq(loans.id, loanId));
+  if (!loan) return { error: "Loan not found" };
+  if (loan.status !== "PENDING") {
+    return { error: "Only pending loans can have their tenure edited" };
+  }
+
+  const existingInstallments = await db
+    .select()
+    .from(installments)
+    .where(eq(installments.loanId, loanId))
+    .orderBy(installments.monthNumber);
+
+  const paid = existingInstallments.filter((i) => i.status === "PAID");
+  const paidMonths = paid.length;
+  const paidPrincipalPaise = paid.reduce((sum, i) => sum + (i.principalPaise ?? 0), 0);
+  const paidInterestPaise = paid.reduce((sum, i) => sum + (i.interestPaise ?? 0), 0);
+
+  if (newTenureMonths <= paidMonths) {
+    return {
+      error: `New tenure must be greater than the ${paidMonths} month(s) already paid`,
+    };
+  }
+
+  if (newTenureMonths === loan.tenureMonths) {
+    return {};
+  }
+
+  const { emiPaise, totalInterestPaise, finalTotalPaise } =
+    loan.repaymentType === "INTEREST_ONLY"
+      ? ((r) => ({
+          emiPaise: r.monthlyInterestPaise,
+          totalInterestPaise: r.totalInterestPaise,
+          finalTotalPaise: r.finalTotalPaise,
+        }))(calculateInterestOnly(loan.principalPaise, loan.annualRatePercent, newTenureMonths))
+      : calculateEmi(loan.principalPaise, loan.annualRatePercent, newTenureMonths);
+
+  const remainingSchedule = rebuildRemainingSchedule({
+    startDate: loan.startDate,
+    newTenureMonths,
+    repaymentType: loan.repaymentType,
+    principalPaise: loan.principalPaise,
+    newTotalInterestPaise: totalInterestPaise,
+    paidMonths,
+    paidPrincipalPaise,
+    paidInterestPaise,
+  });
+
+  const now = Date.now();
+
+  // Already-PAID installments are never touched — only PENDING rows (the
+  // not-yet-paid tail) are replaced with the recalculated remaining schedule.
+  await db
+    .delete(installments)
+    .where(and(eq(installments.loanId, loanId), eq(installments.status, "PENDING")));
+
+  await db.insert(installments).values(
+    remainingSchedule.map((entry) => ({
+      loanId,
+      monthNumber: entry.monthNumber,
+      dueDate: entry.dueDate,
+      principalPaise: entry.principalPaise,
+      interestPaise: entry.interestPaise,
+      amountPaise: entry.amountPaise,
+      status: "PENDING" as const,
+      createdAt: now,
+    }))
+  );
+
+  await db
+    .update(loans)
+    .set({
+      tenureMonths: newTenureMonths,
+      emiPaise,
+      totalInterestPaise,
+      finalTotalPaise,
+      updatedAt: now,
+    })
+    .where(eq(loans.id, loanId));
+
+  revalidatePath(`/loans/${loanId}`);
+  revalidatePath("/");
+  revalidatePath(`/contacts/${loan.contactId}`);
+
+  return {};
 }
 
 export async function deleteLoan(loanId: number) {

@@ -17,6 +17,7 @@ import { SignaturePad } from "@/components/SignaturePad";
 import { PaymentPanel } from "@/components/PaymentPanel";
 import { RepaymentSchedule } from "@/components/RepaymentSchedule";
 import { DeleteLoanButton } from "@/components/DeleteLoanButton";
+import { EditTenureControl } from "@/components/EditTenureControl";
 
 export default async function LoanDetailPage({
   params,
@@ -65,7 +66,14 @@ export default async function LoanDetailPage({
             label="Interest"
             value={`${loan.annualRatePercent}% · ${formatPaise(loan.totalInterestPaise)}`}
           />
-          <Row label="Tenure" value={`${loan.tenureMonths} months`} />
+          <div className="flex items-center justify-between py-2 text-sm">
+            <span className="text-muted">Tenure</span>
+            {loan.status === "PENDING" ? (
+              <EditTenureControl loanId={loan.id} tenureMonths={loan.tenureMonths} />
+            ) : (
+              <span className="font-medium text-foreground">{loan.tenureMonths} months</span>
+            )}
+          </div>
           {loan.repaymentType === "INTEREST_ONLY" ? (
             <>
               <Row
