@@ -29,6 +29,13 @@
       "when": 1791455161995,
       "tag": "0003_slim_shape",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791527596134,
+      "tag": "0004_demonic_magus",
+      "breakpoints": true
     }
   ]
 }

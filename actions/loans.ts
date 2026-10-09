@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { loans, contacts, paymentLogs } from "@/lib/db/schema";
-import { calculateEmi, calculateInterestOnly } from "@/lib/emi";
+import { loans, contacts, paymentLogs, installments } from "@/lib/db/schema";
+import { calculateEmi, calculateInterestOnly, buildRepaymentSchedule } from "@/lib/emi";
 import { rupeesToPaise } from "@/lib/currency";
 
 const loanSchema = z.object({
@@ -74,6 +74,23 @@ export async function createLoan(
     })
     .returning({ id: loans.id });
 
+  const schedule = buildRepaymentSchedule(
+    new Date(startDate).getTime(),
+    tenureMonths,
+    finalTotalPaise,
+    emiPaise
+  );
+  await db.insert(installments).values(
+    schedule.map((entry) => ({
+      loanId: created.id,
+      monthNumber: entry.monthNumber,
+      dueDate: entry.dueDate,
+      amountPaise: entry.amountPaise,
+      status: "PENDING" as const,
+      createdAt: now,
+    }))
+  );
+
   revalidatePath("/");
   revalidatePath(`/contacts/${contactId}`);
   redirect(`/loans/${created.id}?created=1`);
@@ -97,7 +114,13 @@ export async function getLoan(id: number) {
     .where(eq(paymentLogs.loanId, id))
     .orderBy(desc(paymentLogs.loggedAt));
 
-  return { ...row, paymentLogs: logs };
+  const schedule = await db
+    .select()
+    .from(installments)
+    .where(eq(installments.loanId, id))
+    .orderBy(installments.monthNumber);
+
+  return { ...row, paymentLogs: logs, installments: schedule };
 }
 
 export async function listLoansByContact(contactId: number) {

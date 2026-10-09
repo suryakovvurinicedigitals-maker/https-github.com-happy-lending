@@ -56,6 +56,41 @@ export function calculateInterestOnly(
   };
 }
 
+export interface ScheduleEntry {
+  monthNumber: number;
+  dueDate: number;
+  amountPaise: number;
+}
+
+/**
+ * Builds the month-by-month repayment schedule. Amounts are derived from
+ * the already-rounded EMI/interest figures, with any leftover paise from
+ * rounding absorbed into the final month so the schedule sums exactly to
+ * finalTotalPaise.
+ */
+export function buildRepaymentSchedule(
+  startDate: number,
+  tenureMonths: number,
+  finalTotalPaise: number,
+  emiPaise: number
+): ScheduleEntry[] {
+  const schedule: ScheduleEntry[] = [];
+  let runningTotal = 0;
+
+  for (let month = 1; month <= tenureMonths; month++) {
+    const dueDate = new Date(startDate);
+    dueDate.setMonth(dueDate.getMonth() + month);
+
+    const isLastMonth = month === tenureMonths;
+    const amountPaise = isLastMonth ? finalTotalPaise - runningTotal : emiPaise;
+
+    runningTotal += amountPaise;
+    schedule.push({ monthNumber: month, dueDate: dueDate.getTime(), amountPaise });
+  }
+
+  return schedule;
+}
+
 /**
  * Solves for tenure (months) given a desired EMI, using flat/simple
  * interest: the monthly interest is fixed (computed on the original

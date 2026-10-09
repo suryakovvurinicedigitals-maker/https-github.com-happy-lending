@@ -58,6 +58,21 @@ export const reminders = sqliteTable("reminders", {
   createdAt: integer("created_at").notNull(),
 });
 
+export const installments = sqliteTable("installments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  loanId: integer("loan_id")
+    .notNull()
+    .references(() => loans.id),
+  monthNumber: integer("month_number").notNull(),
+  dueDate: integer("due_date").notNull(),
+  amountPaise: integer("amount_paise").notNull(),
+  status: text("status", { enum: ["PENDING", "PAID"] })
+    .notNull()
+    .default("PENDING"),
+  paidAt: integer("paid_at"),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const attachments = sqliteTable("attachments", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   loanId: integer("loan_id")

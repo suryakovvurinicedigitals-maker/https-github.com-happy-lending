@@ -49,6 +49,20 @@ export function buildClosureMessage(
   );
 }
 
+export function buildInstallmentPaidMessage(
+  contact: MessageContact,
+  installment: { monthNumber: number; amountPaise: number },
+  remainingPaise: number
+): string {
+  return (
+    `Hi ${contact.name}, this confirms your EMI for month ${installment.monthNumber} (${formatPaise(installment.amountPaise)}) has been received for your loan with Happy Lending.\n` +
+    (remainingPaise > 0
+      ? `Remaining balance: ${formatPaise(remainingPaise)}.\n`
+      : `Your loan is now fully paid off.\n`) +
+    `Thank you!`
+  );
+}
+
 export function buildReminderMessage(
   contact: MessageContact,
   loan: MessageLoan

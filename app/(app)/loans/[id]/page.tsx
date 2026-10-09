@@ -15,6 +15,7 @@ import { ReminderSettings } from "@/components/ReminderSettings";
 import { FileUpload } from "@/components/FileUpload";
 import { SignaturePad } from "@/components/SignaturePad";
 import { PaymentPanel } from "@/components/PaymentPanel";
+import { RepaymentSchedule } from "@/components/RepaymentSchedule";
 
 export default async function LoanDetailPage({
   params,
@@ -28,7 +29,7 @@ export default async function LoanDetailPage({
   const data = await getLoan(loanId);
   if (!data) notFound();
 
-  const { loan, contact, paymentLogs } = data;
+  const { loan, contact, paymentLogs, installments } = data;
   const attachments = await listAttachments(loanId);
   const screenshots = attachments.filter((a) => a.kind === "SCREENSHOT");
   const lenderSignature = latestByRole(attachments, "LENDER");
@@ -186,6 +187,13 @@ export default async function LoanDetailPage({
           </div>
         )}
       </Card>
+
+      {installments.length > 0 && (
+        <Card>
+          <SectionTitle>Repayment schedule</SectionTitle>
+          <RepaymentSchedule loanId={loan.id} contact={contact} installments={installments} />
+        </Card>
+      )}
 
       {loan.status === "PENDING" && (
         <Card>
