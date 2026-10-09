@@ -27,6 +27,7 @@ export default async function DashboardPage() {
       principalPaise: loans.principalPaise,
       finalTotalPaise: loans.finalTotalPaise,
       status: loans.status,
+      repaymentType: loans.repaymentType,
       contactName: contacts.name,
     })
     .from(loans)

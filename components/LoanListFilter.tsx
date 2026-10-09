@@ -14,11 +14,13 @@ interface LoanRow {
   principalPaise: number;
   finalTotalPaise: number;
   status: "PENDING" | "RECEIVED";
+  repaymentType: "EMI" | "INTEREST_ONLY";
   contactName: string;
   overdue: boolean;
 }
 
 type Filter = "ALL" | "PENDING" | "OVERDUE" | "RECEIVED";
+type TypeFilter = "ALL" | "EMI" | "INTEREST_ONLY";
 
 const filters: { key: Filter; label: string }[] = [
   { key: "ALL", label: "All" },
@@ -27,14 +29,22 @@ const filters: { key: Filter; label: string }[] = [
   { key: "RECEIVED", label: "Received" },
 ];
 
+const typeFilters: { key: TypeFilter; label: string }[] = [
+  { key: "ALL", label: "All types" },
+  { key: "EMI", label: "EMI" },
+  { key: "INTEREST_ONLY", label: "Interest only" },
+];
+
 export function LoanListFilter({ loans }: { loans: LoanRow[] }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
 
   const filtered = loans.filter((loan) => {
     if (filter === "PENDING" && loan.status !== "PENDING") return false;
     if (filter === "RECEIVED" && loan.status !== "RECEIVED") return false;
     if (filter === "OVERDUE" && !loan.overdue) return false;
+    if (typeFilter !== "ALL" && loan.repaymentType !== typeFilter) return false;
     if (query && !loan.contactName.toLowerCase().includes(query.trim().toLowerCase()))
       return false;
     return true;
@@ -63,6 +73,20 @@ export function LoanListFilter({ loans }: { loans: LoanRow[] }) {
             </Button>
           ))}
         </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {typeFilters.map((f) => (
+          <Button
+            key={f.key}
+            type="button"
+            size="sm"
+            variant={typeFilter === f.key ? "primary" : "secondary"}
+            onClick={() => setTypeFilter(f.key)}
+          >
+            {f.label}
+          </Button>
+        ))}
       </div>
 
       {filtered.length === 0 ? (
