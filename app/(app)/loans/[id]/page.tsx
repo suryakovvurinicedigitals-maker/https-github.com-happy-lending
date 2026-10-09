@@ -41,16 +41,16 @@ export default async function LoanDetailPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground break-words">
             <Link href={`/contacts/${contact.id}`} className="hover:text-accent hover:underline">
               {contact.name}
             </Link>
           </h1>
           <p className="text-sm text-muted">Loan #{loan.id}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={loan.status} />
           <DeleteLoanButton loanId={loan.id} />
         </div>
@@ -66,7 +66,7 @@ export default async function LoanDetailPage({
             label="Interest"
             value={`${loan.annualRatePercent}% · ${formatPaise(loan.totalInterestPaise)}`}
           />
-          <div className="flex items-center justify-between py-2 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-y-1 py-2 text-sm">
             <span className="text-muted">Tenure</span>
             {loan.status === "PENDING" ? (
               <EditTenureControl loanId={loan.id} tenureMonths={loan.tenureMonths} />

@@ -63,7 +63,7 @@ export function RepaymentSchedule({
           return (
             <div
               key={installment.id}
-              className="flex items-center justify-between gap-3 py-2.5 text-sm"
+              className="flex flex-col gap-2 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
             >
               <div className="min-w-0">
                 <p className="font-medium text-foreground">
@@ -90,7 +90,7 @@ export function RepaymentSchedule({
                   Paid
                 </span>
               ) : (
-                <div className="flex shrink-0 gap-2">
+                <div className="flex flex-wrap shrink-0 gap-2">
                   <a
                     href={waHref}
                     target="_blank"

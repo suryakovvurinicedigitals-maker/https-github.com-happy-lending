@@ -17,7 +17,7 @@ export function DeleteLoanButton({ loanId }: { loanId: number }) {
 
   if (confirming) {
     return (
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-muted">Delete this loan and all its data?</span>
         <Button
           type="button"
