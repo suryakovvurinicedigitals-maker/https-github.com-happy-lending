@@ -22,6 +22,12 @@ export const loans = sqliteTable("loans", {
   repaymentType: text("repayment_type", { enum: ["EMI", "INTEREST_ONLY"] })
     .notNull()
     .default("EMI"),
+  // Only meaningful when repaymentType is "EMI" — flat charges interest on
+  // the original principal all tenure long, reducing charges it on the
+  // shrinking outstanding balance (the standard bank/NBFC method).
+  interestMethod: text("interest_method", { enum: ["FLAT", "REDUCING"] })
+    .notNull()
+    .default("FLAT"),
   emiPaise: integer("emi_paise").notNull(),
   totalInterestPaise: integer("total_interest_paise").notNull(),
   finalTotalPaise: integer("final_total_paise").notNull(),

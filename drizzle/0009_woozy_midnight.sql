@@ -1,0 +1,1 @@
+ALTER TABLE `loans` ADD `interest_method` text DEFAULT 'FLAT' NOT NULL;

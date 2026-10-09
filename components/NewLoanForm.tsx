@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { createLoan } from "@/actions/loans";
-import { Field, TextInput, Select } from "@/components/ui/Field";
+import { Field, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { EmiFields } from "@/components/EmiFields";
 
@@ -19,7 +19,6 @@ export function NewLoanForm({
   defaultContactId?: number;
 }) {
   const [state, formAction, pending] = useActionState(createLoan, undefined);
-  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <form action={formAction}>
@@ -41,10 +40,6 @@ export function NewLoanForm({
       </Field>
 
       <EmiFields />
-
-      <Field label="Start date">
-        <TextInput name="startDate" type="date" defaultValue={today} required />
-      </Field>
 
       {state?.error && (
         <p className="mb-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">

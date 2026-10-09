@@ -3,8 +3,12 @@
 import { useMemo, useState } from "react";
 import {
   calculateEmi,
+  calculateEmiReducing,
   calculateInterestOnly,
   calculateTenureFromEmi,
+  calculateTenureFromEmiReducing,
+  buildRepaymentSchedule,
+  buildReducingBalanceSchedule,
 } from "@/lib/emi";
 import { rupeesToPaise, paiseToRupees, formatPaise } from "@/lib/currency";
 import { Field, TextInput } from "@/components/ui/Field";
@@ -13,6 +17,9 @@ export function EmiFields() {
   const [repaymentType, setRepaymentType] = useState<"EMI" | "INTEREST_ONLY">(
     "EMI"
   );
+  const [interestMethod, setInterestMethod] = useState<"FLAT" | "REDUCING">(
+    "FLAT"
+  );
   const [mode, setMode] = useState<"tenure" | "emi">("tenure");
   const [principal, setPrincipal] = useState("");
   const [rate, setRate] = useState(""); // annual %
@@ -20,9 +27,14 @@ export function EmiFields() {
   const [rateRupees, setRateRupees] = useState(""); // monthly ₹
   const [tenure, setTenure] = useState("");
   const [desiredEmi, setDesiredEmi] = useState("");
+  const [startDate, setStartDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
 
   const principalPaise = rupeesToPaise(Number(principal) || 0);
   const ratePercent = Number(rate) || 0;
+  const effectiveInterestMethod =
+    repaymentType === "EMI" ? interestMethod : "FLAT";
 
   function handleRateChange(value: string) {
     setRate(value);
@@ -90,8 +102,10 @@ export function EmiFields() {
     if (effectiveMode !== "emi") return null;
     const emiPaise = rupeesToPaise(Number(desiredEmi) || 0);
     if (!principalPaise || !emiPaise) return null;
-    return calculateTenureFromEmi(principalPaise, ratePercent, emiPaise);
-  }, [effectiveMode, desiredEmi, principalPaise, ratePercent]);
+    return effectiveInterestMethod === "REDUCING"
+      ? calculateTenureFromEmiReducing(principalPaise, ratePercent, emiPaise)
+      : calculateTenureFromEmi(principalPaise, ratePercent, emiPaise);
+  }, [effectiveMode, desiredEmi, principalPaise, ratePercent, effectiveInterestMethod]);
 
   const effectiveTenure =
     effectiveMode === "tenure" ? Number(tenure) || 0 : solvedTenure ?? 0;
@@ -101,12 +115,36 @@ export function EmiFields() {
     if (repaymentType === "INTEREST_ONLY") {
       return calculateInterestOnly(principalPaise, ratePercent, effectiveTenure);
     }
-    return calculateEmi(principalPaise, ratePercent, effectiveTenure);
-  }, [principalPaise, ratePercent, effectiveTenure, repaymentType]);
+    return effectiveInterestMethod === "REDUCING"
+      ? calculateEmiReducing(principalPaise, ratePercent, effectiveTenure)
+      : calculateEmi(principalPaise, ratePercent, effectiveTenure);
+  }, [principalPaise, ratePercent, effectiveTenure, repaymentType, effectiveInterestMethod]);
+
+  const schedule = useMemo(() => {
+    if (!result || !principalPaise || !effectiveTenure || !startDate) return [];
+    const startDateMs = new Date(startDate).getTime();
+    if (effectiveInterestMethod === "REDUCING") {
+      return buildReducingBalanceSchedule({
+        startDate: startDateMs,
+        tenureMonths: effectiveTenure,
+        principalPaise,
+        annualRatePercent: ratePercent,
+        emiPaise: "emiPaise" in result ? result.emiPaise : 0,
+      });
+    }
+    return buildRepaymentSchedule({
+      startDate: startDateMs,
+      tenureMonths: effectiveTenure,
+      repaymentType,
+      principalPaise,
+      totalInterestPaise: result.totalInterestPaise,
+    });
+  }, [result, principalPaise, effectiveTenure, effectiveInterestMethod, repaymentType, ratePercent, startDate]);
 
   return (
     <div>
       <input type="hidden" name="repaymentType" value={repaymentType} />
+      <input type="hidden" name="interestMethod" value={effectiveInterestMethod} />
 
       <div className="mb-4 flex flex-wrap gap-2 text-sm">
         <label
@@ -140,6 +178,50 @@ export function EmiFields() {
           Interest-only (principal at the end)
         </label>
       </div>
+
+      {repaymentType === "EMI" && (
+        <Field
+          label="Interest calculation"
+          hint={
+            interestMethod === "REDUCING"
+              ? "Interest is charged on the outstanding balance, so it shrinks every month as principal gets paid off. Standard bank/NBFC method."
+              : "Interest is charged on the full original principal for the whole tenure, even as it gets paid down. Costs more total interest than reducing balance at the same rate."
+          }
+        >
+          <div className="flex flex-wrap gap-2 text-sm">
+            <label
+              className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 transition-colors ${
+                interestMethod === "FLAT"
+                  ? "border-accent text-foreground"
+                  : "border-border text-muted hover:text-foreground"
+              }`}
+            >
+              <input
+                type="radio"
+                className="accent-accent"
+                checked={interestMethod === "FLAT"}
+                onChange={() => setInterestMethod("FLAT")}
+              />
+              Flat rate
+            </label>
+            <label
+              className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 transition-colors ${
+                interestMethod === "REDUCING"
+                  ? "border-accent text-foreground"
+                  : "border-border text-muted hover:text-foreground"
+              }`}
+            >
+              <input
+                type="radio"
+                className="accent-accent"
+                checked={interestMethod === "REDUCING"}
+                onChange={() => setInterestMethod("REDUCING")}
+              />
+              Reducing balance
+            </label>
+          </div>
+        </Field>
+      )}
 
       <Field label="Principal amount (₹)">
         <TextInput
@@ -284,6 +366,16 @@ export function EmiFields() {
         </>
       )}
 
+      <Field label="Start date">
+        <TextInput
+          name="startDate"
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          required
+        />
+      </Field>
+
       {result && effectiveTenure > 0 && (
         <div className="mb-4 rounded-lg border border-border bg-background p-4 text-sm">
           <div className="mb-1.5 flex justify-between">
@@ -309,7 +401,9 @@ export function EmiFields() {
             </>
           ) : (
             <div className="mb-1.5 flex justify-between">
-              <span className="text-muted">EMI / month</span>
+              <span className="text-muted">
+                EMI / month{effectiveInterestMethod === "REDUCING" ? " (levels off; last month may differ slightly)" : ""}
+              </span>
               <span className="font-medium text-foreground">
                 {formatPaise(result.emiPaise)}
               </span>
@@ -320,6 +414,50 @@ export function EmiFields() {
             <span className="font-semibold text-foreground">
               {formatPaise(result.finalTotalPaise)}
             </span>
+          </div>
+        </div>
+      )}
+
+      {schedule.length > 0 && (
+        <div className="mb-4">
+          <p className="mb-1.5 text-sm font-medium text-foreground">
+            Repayment schedule preview
+          </p>
+          <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-surface text-muted">
+                <tr>
+                  <th className="px-2.5 py-1.5 text-left font-medium">Month</th>
+                  <th className="px-2.5 py-1.5 text-left font-medium">Due date</th>
+                  <th className="px-2.5 py-1.5 text-right font-medium">Principal</th>
+                  <th className="px-2.5 py-1.5 text-right font-medium">Interest</th>
+                  <th className="px-2.5 py-1.5 text-right font-medium">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {schedule.map((entry) => (
+                  <tr key={entry.monthNumber}>
+                    <td className="px-2.5 py-1.5 text-foreground">{entry.monthNumber}</td>
+                    <td className="px-2.5 py-1.5 text-muted">
+                      {new Date(entry.dueDate).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="px-2.5 py-1.5 text-right text-foreground">
+                      {formatPaise(entry.principalPaise)}
+                    </td>
+                    <td className="px-2.5 py-1.5 text-right text-foreground">
+                      {formatPaise(entry.interestPaise)}
+                    </td>
+                    <td className="px-2.5 py-1.5 text-right font-medium text-foreground">
+                      {formatPaise(entry.amountPaise)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

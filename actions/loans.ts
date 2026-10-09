@@ -15,9 +15,12 @@ import {
 } from "@/lib/db/schema";
 import {
   calculateEmi,
+  calculateEmiReducing,
   calculateInterestOnly,
   buildRepaymentSchedule,
+  buildReducingBalanceSchedule,
   rebuildRemainingSchedule,
+  rebuildRemainingReducingBalanceSchedule,
 } from "@/lib/emi";
 import { rupeesToPaise } from "@/lib/currency";
 import { deleteUploadsForLoan } from "@/lib/uploads";
@@ -29,6 +32,7 @@ const loanSchema = z.object({
   tenureMonths: z.coerce.number().int().positive(),
   startDate: z.string().min(1),
   repaymentType: z.enum(["EMI", "INTEREST_ONLY"]),
+  interestMethod: z.enum(["FLAT", "REDUCING"]).default("FLAT"),
 });
 
 export async function createLoan(
@@ -42,6 +46,7 @@ export async function createLoan(
     tenureMonths: formData.get("tenureMonths"),
     startDate: formData.get("startDate"),
     repaymentType: formData.get("repaymentType"),
+    interestMethod: formData.get("interestMethod") || undefined,
   });
 
   if (!parsed.success) {
@@ -55,9 +60,14 @@ export async function createLoan(
     tenureMonths,
     startDate,
     repaymentType,
+    interestMethod,
   } = parsed.data;
 
   const principalPaise = rupeesToPaise(principalRupees);
+  // Reducing balance only makes sense for amortized EMI loans — an
+  // interest-only "bullet" loan never actually reduces its balance until
+  // the final month, so flat and reducing are identical for it.
+  const effectiveInterestMethod = repaymentType === "EMI" ? interestMethod : "FLAT";
 
   const { emiPaise, totalInterestPaise, finalTotalPaise } =
     repaymentType === "INTEREST_ONLY"
@@ -66,7 +76,9 @@ export async function createLoan(
           totalInterestPaise: r.totalInterestPaise,
           finalTotalPaise: r.finalTotalPaise,
         }))(calculateInterestOnly(principalPaise, annualRatePercent, tenureMonths))
-      : calculateEmi(principalPaise, annualRatePercent, tenureMonths);
+      : effectiveInterestMethod === "REDUCING"
+        ? calculateEmiReducing(principalPaise, annualRatePercent, tenureMonths)
+        : calculateEmi(principalPaise, annualRatePercent, tenureMonths);
 
   const now = Date.now();
   const [created] = await db
@@ -77,6 +89,7 @@ export async function createLoan(
       annualRatePercent,
       tenureMonths,
       repaymentType,
+      interestMethod: effectiveInterestMethod,
       emiPaise,
       totalInterestPaise,
       finalTotalPaise,
@@ -87,13 +100,22 @@ export async function createLoan(
     })
     .returning({ id: loans.id });
 
-  const schedule = buildRepaymentSchedule({
-    startDate: new Date(startDate).getTime(),
-    tenureMonths,
-    repaymentType,
-    principalPaise,
-    totalInterestPaise,
-  });
+  const schedule =
+    effectiveInterestMethod === "REDUCING"
+      ? buildReducingBalanceSchedule({
+          startDate: new Date(startDate).getTime(),
+          tenureMonths,
+          principalPaise,
+          annualRatePercent,
+          emiPaise,
+        })
+      : buildRepaymentSchedule({
+          startDate: new Date(startDate).getTime(),
+          tenureMonths,
+          repaymentType,
+          principalPaise,
+          totalInterestPaise,
+        });
   await db.insert(installments).values(
     schedule.map((entry) => ({
       loanId: created.id,
@@ -199,25 +221,57 @@ async function applyLoanTermsChange(
     return {};
   }
 
-  const { emiPaise, totalInterestPaise, finalTotalPaise } =
-    loan.repaymentType === "INTEREST_ONLY"
-      ? ((r) => ({
-          emiPaise: r.monthlyInterestPaise,
-          totalInterestPaise: r.totalInterestPaise,
-          finalTotalPaise: r.finalTotalPaise,
-        }))(calculateInterestOnly(loan.principalPaise, newAnnualRatePercent, newTenureMonths))
-      : calculateEmi(loan.principalPaise, newAnnualRatePercent, newTenureMonths);
+  const remainingPrincipalPaise = loan.principalPaise - paidPrincipalPaise;
 
-  const remainingSchedule = rebuildRemainingSchedule({
-    startDate: loan.startDate,
-    newTenureMonths,
-    repaymentType: loan.repaymentType,
-    principalPaise: loan.principalPaise,
-    newTotalInterestPaise: totalInterestPaise,
-    paidMonths,
-    paidPrincipalPaise,
-    paidInterestPaise,
-  });
+  let emiPaise: number;
+  let totalInterestPaise: number;
+  let finalTotalPaise: number;
+  let remainingSchedule: ReturnType<typeof rebuildRemainingSchedule>;
+
+  if (loan.repaymentType === "INTEREST_ONLY") {
+    const r = calculateInterestOnly(loan.principalPaise, newAnnualRatePercent, newTenureMonths);
+    emiPaise = r.monthlyInterestPaise;
+    totalInterestPaise = r.totalInterestPaise;
+    finalTotalPaise = r.finalTotalPaise;
+    remainingSchedule = rebuildRemainingSchedule({
+      startDate: loan.startDate,
+      newTenureMonths,
+      repaymentType: loan.repaymentType,
+      principalPaise: loan.principalPaise,
+      newTotalInterestPaise: totalInterestPaise,
+      paidMonths,
+      paidPrincipalPaise,
+      paidInterestPaise,
+    });
+  } else if (loan.interestMethod === "REDUCING") {
+    const remainingMonths = newTenureMonths - paidMonths;
+    const r = calculateEmiReducing(remainingPrincipalPaise, newAnnualRatePercent, remainingMonths);
+    emiPaise = r.emiPaise;
+    totalInterestPaise = paidInterestPaise + r.totalInterestPaise;
+    finalTotalPaise = loan.principalPaise + totalInterestPaise;
+    remainingSchedule = rebuildRemainingReducingBalanceSchedule({
+      startDate: loan.startDate,
+      newTenureMonths,
+      annualRatePercent: newAnnualRatePercent,
+      paidMonths,
+      remainingPrincipalPaise,
+    });
+  } else {
+    const r = calculateEmi(loan.principalPaise, newAnnualRatePercent, newTenureMonths);
+    emiPaise = r.emiPaise;
+    totalInterestPaise = r.totalInterestPaise;
+    finalTotalPaise = r.finalTotalPaise;
+    remainingSchedule = rebuildRemainingSchedule({
+      startDate: loan.startDate,
+      newTenureMonths,
+      repaymentType: loan.repaymentType,
+      principalPaise: loan.principalPaise,
+      newTotalInterestPaise: totalInterestPaise,
+      paidMonths,
+      paidPrincipalPaise,
+      paidInterestPaise,
+    });
+  }
 
   const now = Date.now();
 

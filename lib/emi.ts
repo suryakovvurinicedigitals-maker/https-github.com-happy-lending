@@ -18,6 +18,10 @@ function flatMonthlyInterest(
   return (principalPaise * annualRatePercent) / 1200;
 }
 
+function monthlyRateFraction(annualRatePercent: number): number {
+  return annualRatePercent / 1200;
+}
+
 export function calculateEmi(
   principalPaise: number,
   annualRatePercent: number,
@@ -29,6 +33,48 @@ export function calculateEmi(
   const emiPaise = Math.round(finalTotalPaise / tenureMonths);
 
   return { emiPaise, totalInterestPaise, finalTotalPaise };
+}
+
+/**
+ * Reducing-balance (diminishing/amortizing) EMI: the standard formula banks
+ * and NBFCs use. Interest each month is charged on the outstanding balance
+ * rather than the original principal, so the interest portion of the EMI
+ * shrinks over time while the principal portion grows, even though the EMI
+ * itself stays level.
+ */
+export function calculateEmiReducing(
+  principalPaise: number,
+  annualRatePercent: number,
+  tenureMonths: number
+): EmiResult {
+  const r = monthlyRateFraction(annualRatePercent);
+  const emiPaise =
+    r === 0
+      ? Math.round(principalPaise / tenureMonths)
+      : Math.round(
+          (principalPaise * r * Math.pow(1 + r, tenureMonths)) /
+            (Math.pow(1 + r, tenureMonths) - 1)
+        );
+
+  // Walk the amortization to get the exact total interest (accounts for
+  // per-month rounding and the final month absorbing any leftover balance).
+  let balance = principalPaise;
+  let totalInterestPaise = 0;
+  for (let i = 1; i <= tenureMonths; i++) {
+    const interestPaise = r === 0 ? 0 : Math.round(balance * r);
+    totalInterestPaise += interestPaise;
+    const isLast = i === tenureMonths;
+    const principalPortion = isLast
+      ? balance
+      : Math.max(Math.min(emiPaise - interestPaise, balance), 0);
+    balance -= principalPortion;
+  }
+
+  return {
+    emiPaise,
+    totalInterestPaise,
+    finalTotalPaise: principalPaise + totalInterestPaise,
+  };
 }
 
 /**
@@ -176,6 +222,104 @@ export function rebuildRemainingSchedule(params: {
     principalPaise: params.principalPaise - params.paidPrincipalPaise,
     interestPaise: params.newTotalInterestPaise - params.paidInterestPaise,
   });
+}
+
+/**
+ * Builds a reducing-balance amortization schedule by walking the
+ * outstanding balance month by month: interest is charged on whatever
+ * balance remains, the rest of the EMI goes to principal, and the final
+ * month absorbs any leftover balance from rounding. `startMonth` lets
+ * rebuildRemainingReducingBalanceSchedule resume numbering/dates partway
+ * through an existing loan.
+ */
+export function buildReducingBalanceSchedule(params: {
+  startDate: number;
+  startMonth?: number;
+  tenureMonths: number;
+  principalPaise: number;
+  annualRatePercent: number;
+  emiPaise: number;
+}): ScheduleEntry[] {
+  const { startDate, tenureMonths, principalPaise, annualRatePercent, emiPaise } = params;
+  const startMonth = params.startMonth ?? 0;
+  const r = monthlyRateFraction(annualRatePercent);
+
+  const schedule: ScheduleEntry[] = [];
+  let balance = principalPaise;
+  for (let i = 1; i <= tenureMonths; i++) {
+    const monthNumber = startMonth + i;
+    const dueDate = new Date(startDate);
+    dueDate.setMonth(dueDate.getMonth() + monthNumber);
+
+    const isLast = i === tenureMonths;
+    const interestPaise = r === 0 ? 0 : Math.round(balance * r);
+    const principalPaiseThisMonth = isLast
+      ? balance
+      : Math.max(Math.min(emiPaise - interestPaise, balance), 0);
+    balance -= principalPaiseThisMonth;
+
+    schedule.push({
+      monthNumber,
+      dueDate: dueDate.getTime(),
+      principalPaise: principalPaiseThisMonth,
+      interestPaise,
+      amountPaise: principalPaiseThisMonth + interestPaise,
+    });
+  }
+
+  return schedule;
+}
+
+/**
+ * Rebuilds only the not-yet-paid tail of a reducing-balance schedule after a
+ * loan's tenure/rate is edited. Re-amortizes the actual remaining balance
+ * (principal minus whatever's already been paid off) over the remaining
+ * months at the new rate, with a fresh EMI solved for that balance.
+ */
+export function rebuildRemainingReducingBalanceSchedule(params: {
+  startDate: number;
+  newTenureMonths: number;
+  annualRatePercent: number;
+  paidMonths: number;
+  remainingPrincipalPaise: number;
+}): ScheduleEntry[] {
+  const remainingMonths = params.newTenureMonths - params.paidMonths;
+  const { emiPaise } = calculateEmiReducing(
+    params.remainingPrincipalPaise,
+    params.annualRatePercent,
+    remainingMonths
+  );
+  return buildReducingBalanceSchedule({
+    startDate: params.startDate,
+    startMonth: params.paidMonths,
+    tenureMonths: remainingMonths,
+    principalPaise: params.remainingPrincipalPaise,
+    annualRatePercent: params.annualRatePercent,
+    emiPaise,
+  });
+}
+
+/**
+ * Solves for tenure (months) given a desired reducing-balance EMI. Closed
+ * form from the standard amortization formula solved for n. Returns null if
+ * the EMI is too low to ever cover the first month's interest.
+ */
+export function calculateTenureFromEmiReducing(
+  principalPaise: number,
+  annualRatePercent: number,
+  desiredEmiPaise: number
+): number | null {
+  const r = monthlyRateFraction(annualRatePercent);
+  if (r === 0) {
+    return desiredEmiPaise > 0 ? Math.ceil(principalPaise / desiredEmiPaise) : null;
+  }
+  const firstMonthInterestPaise = principalPaise * r;
+  if (desiredEmiPaise <= firstMonthInterestPaise) return null;
+
+  const n =
+    Math.log(desiredEmiPaise / (desiredEmiPaise - firstMonthInterestPaise)) /
+    Math.log(1 + r);
+  return Math.ceil(n);
 }
 
 /**
