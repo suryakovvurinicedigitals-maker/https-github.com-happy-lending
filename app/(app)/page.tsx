@@ -4,7 +4,6 @@ import { ReactNode } from "react";
 import {
   Wallet,
   TrendingUp,
-  Clock,
   Inbox,
   BellRing,
   FileDown,
@@ -19,6 +18,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ReminderQueueItem } from "@/components/ReminderQueueItem";
 import { LoanListFilter } from "@/components/LoanListFilter";
+import { OutstandingStatCard } from "@/components/OutstandingStatCard";
 
 export default async function DashboardPage() {
   const rows = await db
@@ -33,11 +33,6 @@ export default async function DashboardPage() {
     .innerJoin(contacts, eq(loans.contactId, contacts.id))
     .orderBy(desc(loans.createdAt));
 
-  const pending = rows.filter((r) => r.status === "PENDING");
-  const totalOutstandingPaise = pending.reduce(
-    (sum, r) => sum + r.finalTotalPaise,
-    0
-  );
   const totalLentPaise = rows.reduce((sum, r) => sum + r.principalPaise, 0);
   const dueReminders = await listDueReminders();
 
@@ -46,6 +41,7 @@ export default async function DashboardPage() {
       loanId: installments.loanId,
       amountPaise: installments.amountPaise,
       amountPaidPaise: installments.amountPaidPaise,
+      principalPaise: installments.principalPaise,
       status: installments.status,
       dueDate: installments.dueDate,
     })
@@ -55,12 +51,27 @@ export default async function DashboardPage() {
   const now = Date.now();
   const overdueLoanIds = new Set<number>();
   let overdueAmountPaise = 0;
+  // Remaining principal/interest, not the gross scheduled total: accounts
+  // for any partial payments already received on still-open installments.
+  let remainingPrincipalPaise = 0;
+  let remainingInterestPaise = 0;
   for (const i of allInstallments) {
-    if (i.status !== "PAID" && i.dueDate < now) {
+    if (i.status === "PAID") continue;
+    const remainingPaise = i.amountPaise - (i.amountPaidPaise ?? 0);
+    if (remainingPaise > 0) {
+      const principalShare =
+        i.amountPaise > 0
+          ? Math.round((remainingPaise * (i.principalPaise ?? 0)) / i.amountPaise)
+          : 0;
+      remainingPrincipalPaise += principalShare;
+      remainingInterestPaise += remainingPaise - principalShare;
+    }
+    if (i.dueDate < now) {
       overdueLoanIds.add(i.loanId);
-      overdueAmountPaise += i.amountPaise - (i.amountPaidPaise ?? 0);
+      overdueAmountPaise += remainingPaise;
     }
   }
+  const totalOutstandingPaise = remainingPrincipalPaise + remainingInterestPaise;
 
   const loanRows = rows.map((r) => ({ ...r, overdue: overdueLoanIds.has(r.id) }));
 
@@ -111,10 +122,10 @@ export default async function DashboardPage() {
           label="Total principal lent"
           value={formatPaise(totalLentPaise)}
         />
-        <StatCard
-          icon={<Clock className="h-5 w-5" />}
-          label="Outstanding (pending)"
-          value={formatPaise(totalOutstandingPaise)}
+        <OutstandingStatCard
+          totalPaise={totalOutstandingPaise}
+          principalPaise={remainingPrincipalPaise}
+          interestPaise={remainingInterestPaise}
         />
         <StatCard
           icon={<AlertTriangle className="h-5 w-5" />}
