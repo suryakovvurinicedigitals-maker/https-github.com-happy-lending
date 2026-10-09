@@ -59,33 +59,66 @@ export function calculateInterestOnly(
 export interface ScheduleEntry {
   monthNumber: number;
   dueDate: number;
+  principalPaise: number;
+  interestPaise: number;
   amountPaise: number;
 }
 
 /**
- * Builds the month-by-month repayment schedule. Amounts are derived from
- * the already-rounded EMI/interest figures, with any leftover paise from
- * rounding absorbed into the final month so the schedule sums exactly to
- * finalTotalPaise.
+ * Builds the month-by-month repayment schedule, split into principal and
+ * interest components. Both components are divided evenly across the
+ * tenure (interest is already flat/simple, not reducing-balance), with any
+ * leftover paise from rounding absorbed into the final month so the
+ * schedule sums exactly to principal + totalInterestPaise.
+ *
+ * For INTEREST_ONLY loans, only the final month carries a principal
+ * component — every other month is interest-only, matching
+ * calculateInterestOnly's "bullet" repayment shape.
  */
-export function buildRepaymentSchedule(
-  startDate: number,
-  tenureMonths: number,
-  finalTotalPaise: number,
-  emiPaise: number
-): ScheduleEntry[] {
+export function buildRepaymentSchedule(params: {
+  startDate: number;
+  tenureMonths: number;
+  repaymentType: "EMI" | "INTEREST_ONLY";
+  principalPaise: number;
+  totalInterestPaise: number;
+}): ScheduleEntry[] {
+  const { startDate, tenureMonths, repaymentType, principalPaise, totalInterestPaise } =
+    params;
+
   const schedule: ScheduleEntry[] = [];
-  let runningTotal = 0;
+  let principalRunning = 0;
+  let interestRunning = 0;
 
   for (let month = 1; month <= tenureMonths; month++) {
     const dueDate = new Date(startDate);
     dueDate.setMonth(dueDate.getMonth() + month);
 
     const isLastMonth = month === tenureMonths;
-    const amountPaise = isLastMonth ? finalTotalPaise - runningTotal : emiPaise;
+    let monthPrincipalPaise: number;
+    let monthInterestPaise: number;
 
-    runningTotal += amountPaise;
-    schedule.push({ monthNumber: month, dueDate: dueDate.getTime(), amountPaise });
+    if (repaymentType === "INTEREST_ONLY") {
+      monthInterestPaise = Math.round(totalInterestPaise / tenureMonths);
+      monthPrincipalPaise = isLastMonth ? principalPaise : 0;
+    } else {
+      monthPrincipalPaise = isLastMonth
+        ? principalPaise - principalRunning
+        : Math.round(principalPaise / tenureMonths);
+      monthInterestPaise = isLastMonth
+        ? totalInterestPaise - interestRunning
+        : Math.round(totalInterestPaise / tenureMonths);
+    }
+
+    principalRunning += monthPrincipalPaise;
+    interestRunning += monthInterestPaise;
+
+    schedule.push({
+      monthNumber: month,
+      dueDate: dueDate.getTime(),
+      principalPaise: monthPrincipalPaise,
+      interestPaise: monthInterestPaise,
+      amountPaise: monthPrincipalPaise + monthInterestPaise,
+    });
   }
 
   return schedule;

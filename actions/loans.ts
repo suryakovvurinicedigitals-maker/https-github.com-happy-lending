@@ -74,17 +74,20 @@ export async function createLoan(
     })
     .returning({ id: loans.id });
 
-  const schedule = buildRepaymentSchedule(
-    new Date(startDate).getTime(),
+  const schedule = buildRepaymentSchedule({
+    startDate: new Date(startDate).getTime(),
     tenureMonths,
-    finalTotalPaise,
-    emiPaise
-  );
+    repaymentType,
+    principalPaise,
+    totalInterestPaise,
+  });
   await db.insert(installments).values(
     schedule.map((entry) => ({
       loanId: created.id,
       monthNumber: entry.monthNumber,
       dueDate: entry.dueDate,
+      principalPaise: entry.principalPaise,
+      interestPaise: entry.interestPaise,
       amountPaise: entry.amountPaise,
       status: "PENDING" as const,
       createdAt: now,

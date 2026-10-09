@@ -13,6 +13,8 @@ interface Installment {
   id: number;
   monthNumber: number;
   dueDate: number;
+  principalPaise: number | null;
+  interestPaise: number | null;
   amountPaise: number;
   status: "PENDING" | "PAID";
   paidAt: number | null;
@@ -72,7 +74,13 @@ export function RepaymentSchedule({
                     year: "numeric",
                   })}
                 </p>
-                <p className="text-xs text-muted">
+                {installment.principalPaise != null && installment.interestPaise != null && (
+                  <p className="text-xs text-muted">
+                    Principal {formatPaise(installment.principalPaise)} + Interest{" "}
+                    {formatPaise(installment.interestPaise)}
+                  </p>
+                )}
+                <p className="text-sm font-semibold text-foreground">
                   {formatPaise(installment.amountPaise)}
                 </p>
               </div>

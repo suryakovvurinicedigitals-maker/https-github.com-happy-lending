@@ -65,6 +65,8 @@ export const installments = sqliteTable("installments", {
     .references(() => loans.id),
   monthNumber: integer("month_number").notNull(),
   dueDate: integer("due_date").notNull(),
+  principalPaise: integer("principal_paise"),
+  interestPaise: integer("interest_paise"),
   amountPaise: integer("amount_paise").notNull(),
   status: text("status", { enum: ["PENDING", "PAID"] })
     .notNull()
