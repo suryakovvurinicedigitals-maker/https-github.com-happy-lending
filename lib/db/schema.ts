@@ -68,7 +68,8 @@ export const installments = sqliteTable("installments", {
   principalPaise: integer("principal_paise"),
   interestPaise: integer("interest_paise"),
   amountPaise: integer("amount_paise").notNull(),
-  status: text("status", { enum: ["PENDING", "PAID"] })
+  amountPaidPaise: integer("amount_paid_paise"),
+  status: text("status", { enum: ["PENDING", "PARTIAL", "PAID"] })
     .notNull()
     .default("PENDING"),
   paidAt: integer("paid_at"),

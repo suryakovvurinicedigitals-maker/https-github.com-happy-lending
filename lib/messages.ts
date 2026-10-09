@@ -63,6 +63,21 @@ export function buildInstallmentPaidMessage(
   );
 }
 
+export function buildPartialPaymentMessage(
+  contact: MessageContact,
+  installment: { monthNumber: number; amountPaise: number },
+  amountReceivedPaise: number,
+  remainingThisMonthPaise: number,
+  remainingOverallPaise: number
+): string {
+  return (
+    `Hi ${contact.name}, we've received a partial payment of ${formatPaise(amountReceivedPaise)} towards your month ${installment.monthNumber} EMI (${formatPaise(installment.amountPaise)}) for your loan with Happy Lending.\n` +
+    `Remaining for this month: ${formatPaise(remainingThisMonthPaise)}.\n` +
+    `Overall remaining balance: ${formatPaise(remainingOverallPaise)}.\n` +
+    `Thank you!`
+  );
+}
+
 export function buildReminderMessage(
   contact: MessageContact,
   loan: MessageLoan

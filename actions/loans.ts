@@ -173,6 +173,13 @@ export async function updateTenure(
     .where(eq(installments.loanId, loanId))
     .orderBy(installments.monthNumber);
 
+  if (existingInstallments.some((i) => i.status === "PARTIAL")) {
+    return {
+      error:
+        "This loan has a partially paid installment. Fully settle or wait until it's complete before editing the tenure.",
+    };
+  }
+
   const paid = existingInstallments.filter((i) => i.status === "PAID");
   const paidMonths = paid.length;
   const paidPrincipalPaise = paid.reduce((sum, i) => sum + (i.principalPaise ?? 0), 0);

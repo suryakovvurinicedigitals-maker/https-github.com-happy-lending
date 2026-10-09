@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { ReactNode } from "react";
-import { Wallet, TrendingUp, Clock, Inbox, ChevronRight, BellRing } from "lucide-react";
+import { Wallet, TrendingUp, Clock, Inbox, ChevronRight, BellRing, FileDown } from "lucide-react";
 import { db } from "@/lib/db";
 import { loans, contacts } from "@/lib/db/schema";
 import { listDueReminders } from "@/actions/reminders";
@@ -35,7 +35,19 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" description="An overview of everything you've lent." />
+      <PageHeader
+        title="Dashboard"
+        description="An overview of everything you've lent."
+        actions={
+          <a
+            href="/api/export"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-background"
+          >
+            <FileDown className="h-4 w-4" />
+            Export CSV
+          </a>
+        }
+      />
 
       {dueReminders.length > 0 && (
         <Card className="mb-6">
