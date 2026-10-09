@@ -5,9 +5,17 @@ import { revalidatePath } from "next/cache";
 import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { loans, contacts, paymentLogs, installments } from "@/lib/db/schema";
+import {
+  loans,
+  contacts,
+  paymentLogs,
+  installments,
+  attachments,
+  reminders,
+} from "@/lib/db/schema";
 import { calculateEmi, calculateInterestOnly, buildRepaymentSchedule } from "@/lib/emi";
 import { rupeesToPaise } from "@/lib/currency";
+import { deleteUploadsForLoan } from "@/lib/uploads";
 
 const loanSchema = z.object({
   contactId: z.coerce.number().int().positive(),
@@ -132,4 +140,24 @@ export async function listLoansByContact(contactId: number) {
     .from(loans)
     .where(eq(loans.contactId, contactId))
     .orderBy(desc(loans.createdAt));
+}
+
+export async function deleteLoan(loanId: number) {
+  const [row] = await db
+    .select({ contactId: loans.contactId })
+    .from(loans)
+    .where(eq(loans.id, loanId));
+  if (!row) return;
+
+  await deleteUploadsForLoan(loanId);
+
+  await db.delete(attachments).where(eq(attachments.loanId, loanId));
+  await db.delete(installments).where(eq(installments.loanId, loanId));
+  await db.delete(paymentLogs).where(eq(paymentLogs.loanId, loanId));
+  await db.delete(reminders).where(eq(reminders.loanId, loanId));
+  await db.delete(loans).where(eq(loans.id, loanId));
+
+  revalidatePath("/");
+  revalidatePath(`/contacts/${row.contactId}`);
+  redirect("/");
 }

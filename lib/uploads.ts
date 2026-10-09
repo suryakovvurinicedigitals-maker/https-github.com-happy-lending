@@ -1,4 +1,10 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 
 const bucket = process.env.R2_BUCKET_NAME ?? "";
 
@@ -40,4 +46,23 @@ export async function readUpload(key: string): Promise<Buffer> {
   );
   const bytes = await result.Body!.transformToByteArray();
   return Buffer.from(bytes);
+}
+
+export async function deleteUploadsForLoan(loanId: number): Promise<void> {
+  const prefix = `loans/${loanId}/`;
+  const listed = await s3.send(
+    new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix })
+  );
+
+  const keys = (listed.Contents ?? []).flatMap((obj) =>
+    obj.Key ? [{ Key: obj.Key }] : []
+  );
+  if (keys.length === 0) return;
+
+  await s3.send(
+    new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: keys },
+    })
+  );
 }

@@ -16,6 +16,7 @@ import { FileUpload } from "@/components/FileUpload";
 import { SignaturePad } from "@/components/SignaturePad";
 import { PaymentPanel } from "@/components/PaymentPanel";
 import { RepaymentSchedule } from "@/components/RepaymentSchedule";
+import { DeleteLoanButton } from "@/components/DeleteLoanButton";
 
 export default async function LoanDetailPage({
   params,
@@ -48,7 +49,10 @@ export default async function LoanDetailPage({
           </h1>
           <p className="text-sm text-muted">Loan #{loan.id}</p>
         </div>
-        <StatusBadge status={loan.status} />
+        <div className="flex items-center gap-3">
+          <StatusBadge status={loan.status} />
+          <DeleteLoanButton loanId={loan.id} />
+        </div>
       </div>
 
       {created === "1" && <NewLoanBanner contact={contact} loan={loan} />}
