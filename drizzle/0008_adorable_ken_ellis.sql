@@ -1,0 +1,1 @@
+ALTER TABLE `loans` ADD `pre_receive_snapshot` text;

@@ -31,6 +31,10 @@ export const loans = sqliteTable("loans", {
     .default("PENDING"),
   closedAt: integer("closed_at"),
   closureNote: text("closure_note"),
+  // JSON array of installment IDs that "Mark as Received" auto-paid, so
+  // reverting that action knows exactly which installments to restore
+  // (installments that were already PAID beforehand are left alone).
+  preReceiveSnapshot: text("pre_receive_snapshot"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });

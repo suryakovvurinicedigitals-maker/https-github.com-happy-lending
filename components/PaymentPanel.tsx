@@ -8,12 +8,14 @@ import { TextInput, TextArea } from "@/components/ui/Field";
 export function PaymentPanel({ loanId }: { loanId: number }) {
   const [note, setNote] = useState("");
   const [amount, setAmount] = useState("");
+  const [confirmingReceived, setConfirmingReceived] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleMarkReceived() {
     startTransition(async () => {
       await markReceived(loanId, note);
       setNote("");
+      setConfirmingReceived(false);
     });
   }
 
@@ -41,7 +43,7 @@ export function PaymentPanel({ loanId }: { loanId: number }) {
         value={note}
         onChange={(e) => setNote(e.target.value)}
       />
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           variant="secondary"
@@ -50,9 +52,37 @@ export function PaymentPanel({ loanId }: { loanId: number }) {
         >
           Log partial payment
         </Button>
-        <Button type="button" onClick={handleMarkReceived} disabled={isPending}>
-          Mark as Received
-        </Button>
+        {confirmingReceived ? (
+          <>
+            <span className="text-sm text-muted">
+              This marks every remaining installment as paid too. Confirm?
+            </span>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleMarkReceived}
+              disabled={isPending}
+            >
+              {isPending ? "Marking..." : "Yes, mark as Received"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setConfirmingReceived(false)}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            onClick={() => setConfirmingReceived(true)}
+            disabled={isPending}
+          >
+            Mark as Received
+          </Button>
+        )}
       </div>
     </div>
   );

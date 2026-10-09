@@ -15,6 +15,7 @@ import { ReminderSettings } from "@/components/ReminderSettings";
 import { FileUpload } from "@/components/FileUpload";
 import { SignaturePad } from "@/components/SignaturePad";
 import { PaymentPanel } from "@/components/PaymentPanel";
+import { RevertReceivedButton } from "@/components/RevertReceivedButton";
 import { RepaymentSchedule } from "@/components/RepaymentSchedule";
 import { DeleteLoanButton } from "@/components/DeleteLoanButton";
 import { EditTenureControl } from "@/components/EditTenureControl";
@@ -189,6 +190,7 @@ export default async function LoanDetailPage({
                 <FileDown className="h-4 w-4" />
                 Download closure PDF
               </a>
+              <RevertReceivedButton loanId={loan.id} />
             </div>
           </div>
         )}
