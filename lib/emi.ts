@@ -100,13 +100,18 @@ export function buildRepaymentSchedule(params: {
     if (repaymentType === "INTEREST_ONLY") {
       monthInterestPaise = Math.round(totalInterestPaise / tenureMonths);
       monthPrincipalPaise = isLastMonth ? principalPaise : 0;
+    } else if (isLastMonth) {
+      monthPrincipalPaise = principalPaise - principalRunning;
+      monthInterestPaise = totalInterestPaise - interestRunning;
     } else {
-      monthPrincipalPaise = isLastMonth
-        ? principalPaise - principalRunning
-        : Math.round(principalPaise / tenureMonths);
-      monthInterestPaise = isLastMonth
-        ? totalInterestPaise - interestRunning
-        : Math.round(totalInterestPaise / tenureMonths);
+      // Matches calculateEmi's rounding: round the combined payment once,
+      // not the principal/interest components separately, so this figure
+      // always agrees with the EMI shown on the loan summary.
+      const emiPaise = Math.round(
+        (principalPaise + totalInterestPaise) / tenureMonths
+      );
+      monthPrincipalPaise = Math.round(principalPaise / tenureMonths);
+      monthInterestPaise = emiPaise - monthPrincipalPaise;
     }
 
     principalRunning += monthPrincipalPaise;
