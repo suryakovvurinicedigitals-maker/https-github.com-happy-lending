@@ -160,29 +160,24 @@ export function RepaymentSchedule({
                   </span>
                 ) : (
                   <div className="flex flex-wrap shrink-0 gap-2">
-                    <a
-                      href={waHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => handleMarkPaid(installment)}
-                    >
+                    <a href={waHref} target="_blank" rel="noopener noreferrer">
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
                         disabled={isPending}
-                        title="Mark paid and notify via WhatsApp"
+                        title="Notify via WhatsApp"
                       >
                         <MessageCircle className="h-4 w-4" />
                       </Button>
                     </a>
-                    <a href={smsHref} onClick={() => handleMarkPaid(installment)}>
+                    <a href={smsHref}>
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
                         disabled={isPending}
-                        title="Mark paid and notify via SMS"
+                        title="Notify via SMS"
                       >
                         <Smartphone className="h-4 w-4" />
                       </Button>
@@ -225,29 +220,24 @@ export function RepaymentSchedule({
                       className="w-40 rounded-lg border border-border bg-background px-2 py-1 text-sm text-foreground"
                       autoFocus
                     />
-                    <a
-                      href={partialWaHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => handleRecordPartial(installment)}
-                    >
+                    <a href={partialWaHref} target="_blank" rel="noopener noreferrer">
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
                         disabled={isPending}
-                        title="Record and notify via WhatsApp"
+                        title="Notify via WhatsApp"
                       >
                         <MessageCircle className="h-4 w-4" />
                       </Button>
                     </a>
-                    <a href={partialSmsHref} onClick={() => handleRecordPartial(installment)}>
+                    <a href={partialSmsHref}>
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
                         disabled={isPending}
-                        title="Record and notify via SMS"
+                        title="Notify via SMS"
                       >
                         <Smartphone className="h-4 w-4" />
                       </Button>
