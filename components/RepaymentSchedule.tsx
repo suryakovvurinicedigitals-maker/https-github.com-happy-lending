@@ -115,7 +115,7 @@ export function RepaymentSchedule({
           const paidWaHref = buildWaLink(contact.phone, fullPaidMessage);
           const paidSmsHref = buildSmsLink(contact.phone, fullPaidMessage);
 
-          const dueMessage = buildInstallmentDueMessage(contact, installment);
+          const dueMessage = buildInstallmentDueMessage(contact, installment, owedPaise);
           const dueWaHref = buildWaLink(contact.phone, dueMessage);
           const dueSmsHref = buildSmsLink(contact.phone, dueMessage);
 
