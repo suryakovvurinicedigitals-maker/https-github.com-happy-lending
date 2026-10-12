@@ -57,6 +57,50 @@ export async function createContact(
   redirect(`/contacts/${created.id}`);
 }
 
+export async function updateContact(
+  id: number,
+  _prevState: { error?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string }> {
+  const profileId = await requireProfileId();
+
+  const parsed = contactSchema.safeParse({
+    name: formData.get("name"),
+    phone: formData.get("phone"),
+    email: formData.get("email"),
+    address: formData.get("address"),
+    notes: formData.get("notes"),
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const [existing] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.id, id), eq(contacts.profileId, profileId)));
+  if (!existing) {
+    return { error: "Contact not found" };
+  }
+
+  await db
+    .update(contacts)
+    .set({
+      name: parsed.data.name,
+      phone: parsed.data.phone,
+      email: parsed.data.email || null,
+      address: parsed.data.address || null,
+      notes: parsed.data.notes || null,
+      updatedAt: Date.now(),
+    })
+    .where(eq(contacts.id, id));
+
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${id}`);
+  redirect(`/contacts/${id}`);
+}
+
 export async function listContacts() {
   const profileId = await requireProfileId();
   return db

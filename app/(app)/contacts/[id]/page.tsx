@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Mail, MapPin, StickyNote, ChevronRight, Plus } from "lucide-react";
+import { Mail, MapPin, StickyNote, ChevronRight, Plus, Pencil } from "lucide-react";
 import { getContact } from "@/actions/contacts";
 import { listLoansByContact } from "@/actions/loans";
 import { formatPaise } from "@/lib/currency";
@@ -27,12 +27,20 @@ export default async function ContactDetailPage({
         title={contact.name}
         description={contact.phone}
         actions={
-          <Link href={`/loans/new?contactId=${contact.id}`}>
-            <Button>
-              <Plus className="h-4 w-4" />
-              New loan
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href={`/contacts/${contact.id}/edit`}>
+              <Button variant="secondary">
+                <Pencil className="h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+            <Link href={`/loans/new?contactId=${contact.id}`}>
+              <Button>
+                <Plus className="h-4 w-4" />
+                New loan
+              </Button>
+            </Link>
+          </div>
         }
       />
 
