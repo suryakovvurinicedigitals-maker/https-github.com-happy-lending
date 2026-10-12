@@ -173,6 +173,59 @@ const tenureSchema = z.object({
   tenureMonths: z.coerce.number().int().positive(),
 });
 
+const startDateSchema = z.object({
+  startDate: z.string().min(1),
+});
+
+// Shifts every installment's due date to match a corrected start date,
+// without touching amounts, interestMethod, or PAID status — this fixes a
+// typo'd start date, it doesn't re-amortize the loan.
+export async function updateStartDate(
+  loanId: number,
+  newStartDateInput: string
+): Promise<{ error?: string }> {
+  const parsed = startDateSchema.safeParse({ startDate: newStartDateInput });
+  if (!parsed.success) {
+    return { error: "Enter a valid start date" };
+  }
+
+  const [loan] = await db.select().from(loans).where(eq(loans.id, loanId));
+  if (!loan) return { error: "Loan not found" };
+  if (loan.status !== "PENDING") {
+    return { error: "Only pending loans can have their start date edited" };
+  }
+
+  const newStartDate = new Date(parsed.data.startDate).getTime();
+  if (newStartDate === loan.startDate) return {};
+
+  const existingInstallments = await db
+    .select()
+    .from(installments)
+    .where(eq(installments.loanId, loanId));
+
+  await Promise.all(
+    existingInstallments.map((inst) => {
+      const dueDate = new Date(newStartDate);
+      dueDate.setMonth(dueDate.getMonth() + inst.monthNumber);
+      return db
+        .update(installments)
+        .set({ dueDate: dueDate.getTime() })
+        .where(eq(installments.id, inst.id));
+    })
+  );
+
+  await db
+    .update(loans)
+    .set({ startDate: newStartDate, updatedAt: Date.now() })
+    .where(eq(loans.id, loanId));
+
+  revalidatePath(`/loans/${loanId}`);
+  revalidatePath("/");
+  revalidatePath(`/contacts/${loan.contactId}`);
+
+  return {};
+}
+
 const rateSchema = z.object({
   annualRatePercent: z.coerce.number().min(0),
 });

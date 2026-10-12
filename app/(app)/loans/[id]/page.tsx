@@ -20,6 +20,7 @@ import { RepaymentSchedule } from "@/components/RepaymentSchedule";
 import { DeleteLoanButton } from "@/components/DeleteLoanButton";
 import { EditTenureControl } from "@/components/EditTenureControl";
 import { EditRateControl } from "@/components/EditRateControl";
+import { EditStartDateControl } from "@/components/EditStartDateControl";
 
 export default async function LoanDetailPage({
   params,
@@ -106,10 +107,16 @@ export default async function LoanDetailPage({
             value={formatPaise(loan.finalTotalPaise)}
             emphasis
           />
-          <Row
-            label="Start date"
-            value={new Date(loan.startDate).toLocaleDateString("en-IN")}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-y-1 py-2 text-sm">
+            <span className="text-muted">Start date</span>
+            {loan.status === "PENDING" ? (
+              <EditStartDateControl loanId={loan.id} startDate={loan.startDate} />
+            ) : (
+              <span className="font-medium text-foreground">
+                {new Date(loan.startDate).toLocaleDateString("en-IN")}
+              </span>
+            )}
+          </div>
           {loan.closedAt && (
             <Row
               label="Closed date"
