@@ -2,10 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
+import { requireProfileId } from "@/lib/auth/session";
 
 const contactSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
@@ -23,6 +24,8 @@ export async function createContact(
   _prevState: { error?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string }> {
+  const profileId = await requireProfileId();
+
   const parsed = contactSchema.safeParse({
     name: formData.get("name"),
     phone: formData.get("phone"),
@@ -39,6 +42,7 @@ export async function createContact(
   const [created] = await db
     .insert(contacts)
     .values({
+      profileId,
       name: parsed.data.name,
       phone: parsed.data.phone,
       email: parsed.data.email || null,
@@ -54,13 +58,19 @@ export async function createContact(
 }
 
 export async function listContacts() {
-  return db.select().from(contacts).orderBy(contacts.name);
+  const profileId = await requireProfileId();
+  return db
+    .select()
+    .from(contacts)
+    .where(eq(contacts.profileId, profileId))
+    .orderBy(contacts.name);
 }
 
 export async function getContact(id: number) {
+  const profileId = await requireProfileId();
   const [contact] = await db
     .select()
     .from(contacts)
-    .where(eq(contacts.id, id));
+    .where(and(eq(contacts.id, id), eq(contacts.profileId, profileId)));
   return contact ?? null;
 }

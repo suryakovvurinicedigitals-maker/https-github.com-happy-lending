@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, PlusCircle, LogOut, HandCoins } from "lucide-react";
+import { LayoutDashboard, Users, PlusCircle, LogOut, HandCoins, UserCircle2 } from "lucide-react";
 import { logout } from "@/actions/auth";
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/loans/new", label: "New Loan", icon: PlusCircle },
+  { href: "/account", label: "Account", icon: UserCircle2 },
 ];
 
-export function NavBar() {
+export function NavBar({ profileName }: { profileName: string }) {
   const pathname = usePathname();
 
   return (
@@ -25,6 +26,7 @@ export function NavBar() {
         </Link>
 
         <nav className="flex items-center gap-1 text-sm">
+          <span className="mr-1 hidden text-muted sm:inline">{profileName}</span>
           {links.map(({ href, label, icon: Icon }) => {
             const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
             return (

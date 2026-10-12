@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { getIronSession, SessionOptions } from "iron-session";
 
 export interface SessionData {
-  isLoggedIn: boolean;
+  profileId?: number;
 }
 
 export const sessionOptions: SessionOptions = {
@@ -16,4 +16,12 @@ export const sessionOptions: SessionOptions = {
 export async function getSession() {
   const cookieStore = await cookies();
   return getIronSession<SessionData>(cookieStore, sessionOptions);
+}
+
+export async function requireProfileId(): Promise<number> {
+  const session = await getSession();
+  if (!session.profileId) {
+    throw new Error("Not logged in.");
+  }
+  return session.profileId;
 }

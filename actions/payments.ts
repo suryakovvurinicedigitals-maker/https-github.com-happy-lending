@@ -4,13 +4,21 @@ import { revalidatePath } from "next/cache";
 import { eq, ne, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { loans, paymentLogs, installments } from "@/lib/db/schema";
+import { requireProfileId } from "@/lib/auth/session";
 
 // Marking a loan "Received" also auto-pays every installment that isn't
 // already PAID. The IDs of the installments this touched are stashed on the
 // loan as JSON so revertMarkReceived knows exactly what to undo, without
 // disturbing installments that were already PAID beforehand.
 export async function markReceived(loanId: number, note: string) {
+  const profileId = await requireProfileId();
   const now = Date.now();
+
+  const [loan] = await db
+    .select({ id: loans.id })
+    .from(loans)
+    .where(and(eq(loans.id, loanId), eq(loans.profileId, profileId)));
+  if (!loan) return { error: "Loan not found." };
 
   const unpaidInstallments = await db
     .select()
@@ -52,15 +60,21 @@ export async function markReceived(loanId: number, note: string) {
 
   revalidatePath(`/loans/${loanId}`);
   revalidatePath("/");
+
+  return {};
 }
 
 // Undoes markReceived: restores whichever installments it auto-paid to their
 // prior PARTIAL/PENDING state (installments already PAID before are left
 // untouched) and reopens the loan.
 export async function revertMarkReceived(loanId: number) {
+  const profileId = await requireProfileId();
   const now = Date.now();
 
-  const [loan] = await db.select().from(loans).where(eq(loans.id, loanId));
+  const [loan] = await db
+    .select()
+    .from(loans)
+    .where(and(eq(loans.id, loanId), eq(loans.profileId, profileId)));
   if (!loan) return { error: "Loan not found." };
   if (loan.status !== "RECEIVED") {
     return { error: "This loan hasn't been marked as received." };
@@ -113,6 +127,14 @@ export async function logPayment(
   amountRupees: number | null,
   note: string
 ) {
+  const profileId = await requireProfileId();
+
+  const [loan] = await db
+    .select({ id: loans.id })
+    .from(loans)
+    .where(and(eq(loans.id, loanId), eq(loans.profileId, profileId)));
+  if (!loan) return;
+
   await db.insert(paymentLogs).values({
     loanId,
     status: "PENDING",

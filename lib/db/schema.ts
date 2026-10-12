@@ -1,7 +1,18 @@
 import { sqliteTable, integer, text, real } from "drizzle-orm/sqlite-core";
 
+export const profiles = sqliteTable("profiles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+  pinHash: text("pin_hash").notNull(),
+  recoveryCodeHash: text("recovery_code_hash"),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const contacts = sqliteTable("contacts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  profileId: integer("profile_id")
+    .notNull()
+    .references(() => profiles.id),
   name: text("name").notNull(),
   phone: text("phone").notNull(),
   email: text("email"),
@@ -13,6 +24,11 @@ export const contacts = sqliteTable("contacts", {
 
 export const loans = sqliteTable("loans", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  // Denormalized copy of the contact's profileId at creation time, so
+  // loanId-keyed actions can scope by profile without rejoining contacts.
+  profileId: integer("profile_id")
+    .notNull()
+    .references(() => profiles.id),
   contactId: integer("contact_id")
     .notNull()
     .references(() => contacts.id),

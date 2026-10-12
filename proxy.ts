@@ -22,7 +22,7 @@ export async function proxy(request: NextRequest) {
     sessionOptions
   );
 
-  if (!session.isLoggedIn) {
+  if (!session.profileId) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }

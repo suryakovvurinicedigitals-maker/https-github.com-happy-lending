@@ -4,14 +4,31 @@ import { revalidatePath } from "next/cache";
 import { eq, and, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { installments, loans, paymentLogs } from "@/lib/db/schema";
+import { requireProfileId } from "@/lib/auth/session";
 
-export async function markInstallmentPaid(loanId: number, installmentId: number) {
-  const now = Date.now();
+async function getOwnedInstallment(
+  profileId: number,
+  loanId: number,
+  installmentId: number
+) {
+  const [loan] = await db
+    .select({ id: loans.id })
+    .from(loans)
+    .where(and(eq(loans.id, loanId), eq(loans.profileId, profileId)));
+  if (!loan) return null;
 
   const [installment] = await db
     .select()
     .from(installments)
-    .where(eq(installments.id, installmentId));
+    .where(and(eq(installments.id, installmentId), eq(installments.loanId, loanId)));
+  return installment ?? null;
+}
+
+export async function markInstallmentPaid(loanId: number, installmentId: number) {
+  const profileId = await requireProfileId();
+  const now = Date.now();
+
+  const installment = await getOwnedInstallment(profileId, loanId, installmentId);
   if (!installment) return { remainingPaise: 0, loanClosed: false };
 
   const alreadyPaidPaise = installment.amountPaidPaise ?? 0;
@@ -62,16 +79,14 @@ export async function recordPartialPayment(
   installmentId: number,
   amountReceivedRupees: number
 ) {
+  const profileId = await requireProfileId();
   const now = Date.now();
   const amountReceivedPaise = Math.round(amountReceivedRupees * 100);
   if (amountReceivedPaise <= 0) {
     return { error: "Enter an amount greater than zero." };
   }
 
-  const [installment] = await db
-    .select()
-    .from(installments)
-    .where(eq(installments.id, installmentId));
+  const installment = await getOwnedInstallment(profileId, loanId, installmentId);
   if (!installment) return { error: "Installment not found." };
 
   const previouslyPaidPaise = installment.amountPaidPaise ?? 0;
@@ -129,12 +144,10 @@ export async function recordPartialPayment(
 // this installment, restoring whatever PARTIAL/PENDING state it had just
 // before that action (not necessarily all the way back to unpaid).
 export async function revertInstallmentPayment(loanId: number, installmentId: number) {
+  const profileId = await requireProfileId();
   const now = Date.now();
 
-  const [installment] = await db
-    .select()
-    .from(installments)
-    .where(eq(installments.id, installmentId));
+  const installment = await getOwnedInstallment(profileId, loanId, installmentId);
   if (!installment) return { error: "Installment not found." };
   if (installment.status === "PENDING") {
     return { error: "This installment hasn't been paid yet." };

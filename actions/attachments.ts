@@ -1,13 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { attachments } from "@/lib/db/schema";
+import { attachments, loans } from "@/lib/db/schema";
 import { saveUpload } from "@/lib/uploads";
 import { compressImage, compressSignature } from "@/lib/image";
+import { requireProfileId } from "@/lib/auth/session";
+
+async function assertLoanOwned(loanId: number, profileId: number) {
+  const [loan] = await db
+    .select({ id: loans.id })
+    .from(loans)
+    .where(and(eq(loans.id, loanId), eq(loans.profileId, profileId)));
+  return loan !== undefined;
+}
 
 export async function listAttachments(loanId: number) {
+  const profileId = await requireProfileId();
+  if (!(await assertLoanOwned(loanId, profileId))) return [];
+
   return db
     .select()
     .from(attachments)
@@ -18,6 +30,8 @@ export async function uploadScreenshot(
   _prevState: { error?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string }> {
+  const profileId = await requireProfileId();
+
   const loanId = Number(formData.get("loanId"));
   const file = formData.get("file");
 
@@ -25,6 +39,9 @@ export async function uploadScreenshot(
     return { error: "Please choose a file." };
   }
   if (!Number.isInteger(loanId) || loanId <= 0) {
+    return { error: "Invalid loan." };
+  }
+  if (!(await assertLoanOwned(loanId, profileId))) {
     return { error: "Invalid loan." };
   }
 
@@ -53,6 +70,11 @@ export async function saveSignature(
   dataUrl: string,
   signerRole: "LENDER" | "BORROWER"
 ) {
+  const profileId = await requireProfileId();
+  if (!(await assertLoanOwned(loanId, profileId))) {
+    throw new Error("Invalid loan");
+  }
+
   const match = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
   if (!match) {
     throw new Error("Invalid signature image");

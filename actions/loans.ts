@@ -24,6 +24,7 @@ import {
 } from "@/lib/emi";
 import { rupeesToPaise } from "@/lib/currency";
 import { deleteUploadsForLoan } from "@/lib/uploads";
+import { requireProfileId } from "@/lib/auth/session";
 
 const loanSchema = z.object({
   contactId: z.coerce.number().int().positive(),
@@ -39,6 +40,8 @@ export async function createLoan(
   _prevState: { error?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string }> {
+  const profileId = await requireProfileId();
+
   const parsed = loanSchema.safeParse({
     contactId: formData.get("contactId"),
     principalRupees: formData.get("principalRupees"),
@@ -63,6 +66,14 @@ export async function createLoan(
     interestMethod,
   } = parsed.data;
 
+  const [contact] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.id, contactId), eq(contacts.profileId, profileId)));
+  if (!contact) {
+    return { error: "Invalid input" };
+  }
+
   const principalPaise = rupeesToPaise(principalRupees);
   // Reducing balance only makes sense for amortized EMI loans — an
   // interest-only "bullet" loan never actually reduces its balance until
@@ -84,6 +95,7 @@ export async function createLoan(
   const [created] = await db
     .insert(loans)
     .values({
+      profileId,
       contactId,
       principalPaise,
       annualRatePercent,
@@ -135,6 +147,7 @@ export async function createLoan(
 }
 
 export async function getLoan(id: number) {
+  const profileId = await requireProfileId();
   const [row] = await db
     .select({
       loan: loans,
@@ -142,7 +155,7 @@ export async function getLoan(id: number) {
     })
     .from(loans)
     .innerJoin(contacts, eq(loans.contactId, contacts.id))
-    .where(eq(loans.id, id));
+    .where(and(eq(loans.id, id), eq(loans.profileId, profileId)));
 
   if (!row) return null;
 
@@ -162,10 +175,11 @@ export async function getLoan(id: number) {
 }
 
 export async function listLoansByContact(contactId: number) {
+  const profileId = await requireProfileId();
   return db
     .select()
     .from(loans)
-    .where(eq(loans.contactId, contactId))
+    .where(and(eq(loans.contactId, contactId), eq(loans.profileId, profileId)))
     .orderBy(desc(loans.createdAt));
 }
 
@@ -184,12 +198,17 @@ export async function updateStartDate(
   loanId: number,
   newStartDateInput: string
 ): Promise<{ error?: string }> {
+  const profileId = await requireProfileId();
+
   const parsed = startDateSchema.safeParse({ startDate: newStartDateInput });
   if (!parsed.success) {
     return { error: "Enter a valid start date" };
   }
 
-  const [loan] = await db.select().from(loans).where(eq(loans.id, loanId));
+  const [loan] = await db
+    .select()
+    .from(loans)
+    .where(and(eq(loans.id, loanId), eq(loans.profileId, profileId)));
   if (!loan) return { error: "Loan not found" };
   if (loan.status !== "PENDING") {
     return { error: "Only pending loans can have their start date edited" };
@@ -237,7 +256,12 @@ async function applyLoanTermsChange(
   loanId: number,
   changes: { tenureMonths?: number; annualRatePercent?: number }
 ): Promise<{ error?: string }> {
-  const [loan] = await db.select().from(loans).where(eq(loans.id, loanId));
+  const profileId = await requireProfileId();
+
+  const [loan] = await db
+    .select()
+    .from(loans)
+    .where(and(eq(loans.id, loanId), eq(loans.profileId, profileId)));
   if (!loan) return { error: "Loan not found" };
   if (loan.status !== "PENDING") {
     return { error: "Only pending loans can have their terms edited" };
@@ -389,10 +413,12 @@ export async function updateRate(
 }
 
 export async function deleteLoan(loanId: number) {
+  const profileId = await requireProfileId();
+
   const [row] = await db
     .select({ contactId: loans.contactId })
     .from(loans)
-    .where(eq(loans.id, loanId));
+    .where(and(eq(loans.id, loanId), eq(loans.profileId, profileId)));
   if (!row) return;
 
   await deleteUploadsForLoan(loanId);

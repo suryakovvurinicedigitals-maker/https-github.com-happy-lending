@@ -4,8 +4,15 @@ import { db } from "@/lib/db";
 import { loans, contacts, installments } from "@/lib/db/schema";
 import { paiseToRupees } from "@/lib/currency";
 import { buildCsv } from "@/lib/csv";
+import { getSession } from "@/lib/auth/session";
 
 export async function GET() {
+  const session = await getSession();
+  const profileId = session.profileId;
+  if (!profileId) {
+    return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+  }
+
   const loanRows = await db
     .select({
       id: loans.id,
@@ -24,9 +31,19 @@ export async function GET() {
     })
     .from(loans)
     .innerJoin(contacts, eq(loans.contactId, contacts.id))
+    .where(eq(loans.profileId, profileId))
     .orderBy(loans.id);
 
-  const allInstallments = await db.select().from(installments);
+  const allInstallments = await db
+    .select({
+      loanId: installments.loanId,
+      amountPaise: installments.amountPaise,
+      amountPaidPaise: installments.amountPaidPaise,
+      status: installments.status,
+    })
+    .from(installments)
+    .innerJoin(loans, eq(installments.loanId, loans.id))
+    .where(eq(loans.profileId, profileId));
   const owedByLoan = new Map<number, number>();
   for (const i of allInstallments) {
     const owed = i.status === "PAID" ? 0 : i.amountPaise - (i.amountPaidPaise ?? 0);

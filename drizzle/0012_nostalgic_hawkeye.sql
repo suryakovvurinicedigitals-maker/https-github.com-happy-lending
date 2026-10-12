@@ -1,0 +1,1 @@
+ALTER TABLE `profiles` ADD `recovery_code_hash` text;

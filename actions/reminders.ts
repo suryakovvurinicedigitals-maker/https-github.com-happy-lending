@@ -1,12 +1,24 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { reminders, loans, contacts } from "@/lib/db/schema";
 import { currentDuePeriod } from "@/lib/reminders";
+import { requireProfileId } from "@/lib/auth/session";
+
+async function assertLoanOwned(loanId: number, profileId: number) {
+  const [loan] = await db
+    .select({ id: loans.id })
+    .from(loans)
+    .where(and(eq(loans.id, loanId), eq(loans.profileId, profileId)));
+  return loan !== undefined;
+}
 
 export async function getReminder(loanId: number) {
+  const profileId = await requireProfileId();
+  if (!(await assertLoanOwned(loanId, profileId))) return null;
+
   const [row] = await db
     .select()
     .from(reminders)
@@ -19,7 +31,13 @@ export async function saveReminder(
   firstReminderDate: number,
   reminderMonths: number
 ) {
-  const existing = await getReminder(loanId);
+  const profileId = await requireProfileId();
+  if (!(await assertLoanOwned(loanId, profileId))) return;
+
+  const [existing] = await db
+    .select()
+    .from(reminders)
+    .where(eq(reminders.loanId, loanId));
 
   if (existing) {
     await db
@@ -41,12 +59,18 @@ export async function saveReminder(
 }
 
 export async function deleteReminder(loanId: number) {
+  const profileId = await requireProfileId();
+  if (!(await assertLoanOwned(loanId, profileId))) return;
+
   await db.delete(reminders).where(eq(reminders.loanId, loanId));
   revalidatePath(`/loans/${loanId}`);
   revalidatePath("/");
 }
 
 export async function markReminderSent(loanId: number, period: number) {
+  const profileId = await requireProfileId();
+  if (!(await assertLoanOwned(loanId, profileId))) return;
+
   await db
     .update(reminders)
     .set({ lastSentPeriod: period })
@@ -56,7 +80,7 @@ export async function markReminderSent(loanId: number, period: number) {
   revalidatePath("/");
 }
 
-export async function listDueReminders() {
+export async function listDueReminders(profileId: number) {
   const rows = await db
     .select({
       reminder: reminders,
@@ -66,7 +90,7 @@ export async function listDueReminders() {
     .from(reminders)
     .innerJoin(loans, eq(reminders.loanId, loans.id))
     .innerJoin(contacts, eq(loans.contactId, contacts.id))
-    .where(eq(loans.status, "PENDING"));
+    .where(and(eq(loans.status, "PENDING"), eq(loans.profileId, profileId)));
 
   return rows
     .map(({ reminder, loan, contact }) => {

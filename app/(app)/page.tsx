@@ -12,6 +12,7 @@ import {
 import { db } from "@/lib/db";
 import { loans, contacts, installments } from "@/lib/db/schema";
 import { listDueReminders } from "@/actions/reminders";
+import { requireProfileId } from "@/lib/auth/session";
 import { formatPaise } from "@/lib/currency";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -21,6 +22,8 @@ import { LoanListFilter } from "@/components/LoanListFilter";
 import { OutstandingStatCard } from "@/components/OutstandingStatCard";
 
 export default async function DashboardPage() {
+  const profileId = await requireProfileId();
+
   const rows = await db
     .select({
       id: loans.id,
@@ -32,10 +35,11 @@ export default async function DashboardPage() {
     })
     .from(loans)
     .innerJoin(contacts, eq(loans.contactId, contacts.id))
+    .where(eq(loans.profileId, profileId))
     .orderBy(desc(loans.createdAt));
 
   const totalLentPaise = rows.reduce((sum, r) => sum + r.principalPaise, 0);
-  const dueReminders = await listDueReminders();
+  const dueReminders = await listDueReminders(profileId);
 
   const allInstallments = await db
     .select({
@@ -46,7 +50,9 @@ export default async function DashboardPage() {
       status: installments.status,
       dueDate: installments.dueDate,
     })
-    .from(installments);
+    .from(installments)
+    .innerJoin(loans, eq(installments.loanId, loans.id))
+    .where(eq(loans.profileId, profileId));
 
   // eslint-disable-next-line react-hooks/purity -- overdue status must reflect the current wall-clock time, not a memoized render
   const now = Date.now();
