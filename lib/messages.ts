@@ -63,6 +63,17 @@ export function buildInstallmentPaidMessage(
   );
 }
 
+export function buildInstallmentDueMessage(
+  contact: MessageContact,
+  installment: { monthNumber: number; amountPaise: number; dueDate: number }
+): string {
+  const dueDate = new Date(installment.dueDate).toLocaleDateString("en-IN");
+  return (
+    `Hi ${contact.name}, this is a reminder that your EMI for month ${installment.monthNumber} (${formatPaise(installment.amountPaise)}) is due on ${dueDate} for your loan with Happy Lending.\n` +
+    `Please make your payment at the earliest. Thank you!`
+  );
+}
+
 export function buildPartialPaymentMessage(
   contact: MessageContact,
   installment: { monthNumber: number; amountPaise: number },

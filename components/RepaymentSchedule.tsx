@@ -9,7 +9,11 @@ import {
 } from "@/actions/installments";
 import { buildWaLink } from "@/lib/whatsapp";
 import { buildSmsLink } from "@/lib/sms";
-import { buildInstallmentPaidMessage, buildPartialPaymentMessage } from "@/lib/messages";
+import {
+  buildInstallmentPaidMessage,
+  buildInstallmentDueMessage,
+  buildPartialPaymentMessage,
+} from "@/lib/messages";
 import { formatPaise } from "@/lib/currency";
 import { Button } from "@/components/ui/Button";
 
@@ -108,8 +112,12 @@ export function RepaymentSchedule({
             installment,
             remainingAfterFull
           );
-          const waHref = buildWaLink(contact.phone, fullPaidMessage);
-          const smsHref = buildSmsLink(contact.phone, fullPaidMessage);
+          const paidWaHref = buildWaLink(contact.phone, fullPaidMessage);
+          const paidSmsHref = buildSmsLink(contact.phone, fullPaidMessage);
+
+          const dueMessage = buildInstallmentDueMessage(contact, installment);
+          const dueWaHref = buildWaLink(contact.phone, dueMessage);
+          const dueSmsHref = buildSmsLink(contact.phone, dueMessage);
 
           const partialAmountPaise = Math.round(Number(partialAmount || "0") * 100);
           const remainingThisMonthAfterPartial = Math.max(
@@ -188,11 +196,33 @@ export function RepaymentSchedule({
                     </Button>
                   </div>
                 ) : installment.status === "PAID" ? (
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex flex-wrap shrink-0 items-center gap-2">
                     <span className="flex items-center gap-1 text-xs font-medium text-success">
                       <CheckCircle2 className="h-4 w-4" />
                       Paid
                     </span>
+                    <a href={paidWaHref} target="_blank" rel="noopener noreferrer">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={isPending}
+                        title="Notify via WhatsApp"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </Button>
+                    </a>
+                    <a href={paidSmsHref}>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={isPending}
+                        title="Notify via SMS"
+                      >
+                        <Smartphone className="h-4 w-4" />
+                      </Button>
+                    </a>
                     <button
                       type="button"
                       disabled={isPending}
@@ -205,24 +235,24 @@ export function RepaymentSchedule({
                   </div>
                 ) : (
                   <div className="flex flex-wrap shrink-0 items-center gap-2">
-                    <a href={waHref} target="_blank" rel="noopener noreferrer">
+                    <a href={dueWaHref} target="_blank" rel="noopener noreferrer">
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
                         disabled={isPending}
-                        title="Notify via WhatsApp"
+                        title="Remind via WhatsApp"
                       >
                         <MessageCircle className="h-4 w-4" />
                       </Button>
                     </a>
-                    <a href={smsHref}>
+                    <a href={dueSmsHref}>
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
                         disabled={isPending}
-                        title="Notify via SMS"
+                        title="Remind via SMS"
                       >
                         <Smartphone className="h-4 w-4" />
                       </Button>
