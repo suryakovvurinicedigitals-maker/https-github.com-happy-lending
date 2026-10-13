@@ -10,6 +10,7 @@ import {
 } from "@/actions/profiles";
 import { Button } from "@/components/ui/Button";
 import { RecoveryCodeReveal } from "@/components/RecoveryCodeReveal";
+import { seedUnlock } from "@/lib/hooks/useAppLock";
 
 export function ProfilePicker({
   profiles,
@@ -213,6 +214,7 @@ function CreateProfileForm({ onCancel }: { onCancel: () => void }) {
         description="If you ever forget your PIN, this is the only way to get back in."
         continueLabel="Continue to Happy Lending"
         onContinue={() => {
+          seedUnlock();
           router.push("/");
         }}
       />

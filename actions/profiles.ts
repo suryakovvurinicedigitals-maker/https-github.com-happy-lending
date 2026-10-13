@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -104,6 +105,7 @@ export async function loginToProfile(
   session.profileId = profile.id;
   await session.save();
 
+  (await cookies()).set("just-unlocked", "1", { maxAge: 10, httpOnly: false });
   redirect("/");
 }
 
@@ -176,6 +178,7 @@ export async function resetPinWithRecoveryCode(
   session.profileId = profile.id;
   await session.save();
 
+  (await cookies()).set("just-unlocked", "1", { maxAge: 10, httpOnly: false });
   redirect("/");
 }
 
