@@ -1,0 +1,1 @@
+ALTER TABLE `trip_participants` ADD `amount_paid_paise` integer DEFAULT 0 NOT NULL;

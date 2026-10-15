@@ -106,6 +106,42 @@ export const installments = sqliteTable("installments", {
   createdAt: integer("created_at").notNull(),
 });
 
+export const trips = sqliteTable("trips", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  profileId: integer("profile_id")
+    .notNull()
+    .references(() => profiles.id),
+  name: text("name").notNull(),
+  tripDate: integer("trip_date"),
+  notes: text("notes"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const tripExpenses = sqliteTable("trip_expenses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tripId: integer("trip_id")
+    .notNull()
+    .references(() => trips.id),
+  description: text("description").notNull(),
+  amountPaise: integer("amount_paise").notNull(),
+  note: text("note"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const tripParticipants = sqliteTable("trip_participants", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tripId: integer("trip_id")
+    .notNull()
+    .references(() => trips.id),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  // null = auto (equal split of what's left after custom shares);
+  // non-null = fixed custom share set by the user.
+  customSharePaise: integer("custom_share_paise"),
+  amountPaidPaise: integer("amount_paid_paise").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const attachments = sqliteTable("attachments", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   loanId: integer("loan_id")

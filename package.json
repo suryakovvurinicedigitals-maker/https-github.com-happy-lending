@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 4949",
-    "build": "next build",
+    "build": "if [ \"$VERCEL_ENV\" = \"production\" ]; then npx drizzle-kit migrate; fi && next build",
     "start": "next start -p 4949",
     "lint": "eslint"
   },

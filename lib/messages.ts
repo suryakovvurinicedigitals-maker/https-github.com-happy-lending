@@ -90,6 +90,32 @@ export function buildPartialPaymentMessage(
   );
 }
 
+export function buildTripShareMessage(
+  participant: { name: string },
+  trip: { name: string },
+  sharePaise: number,
+  amountPaidPaise: number
+): string {
+  if (amountPaidPaise <= 0) {
+    return (
+      `Hi ${participant.name}, your share for the "${trip.name}" trip is ${formatPaise(sharePaise)}.\n` +
+      `Let me know once you've paid it back. Thanks!`
+    );
+  }
+
+  if (amountPaidPaise < sharePaise) {
+    return (
+      `Hi ${participant.name}, we've received ${formatPaise(amountPaidPaise)} so far towards your ${formatPaise(sharePaise)} share for the "${trip.name}" trip.\n` +
+      `Remaining: ${formatPaise(sharePaise - amountPaidPaise)}.\n` +
+      `Thanks!`
+    );
+  }
+
+  return (
+    `Hi ${participant.name}, your share for the "${trip.name}" trip (${formatPaise(sharePaise)}) has been paid in full. Thank you!`
+  );
+}
+
 export function buildReminderMessage(
   contact: MessageContact,
   loan: MessageLoan
